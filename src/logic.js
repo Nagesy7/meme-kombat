@@ -25,7 +25,7 @@ export function mkFighter(id, side, opts = {}) {
   const ch = byId(id);
   const hp = opts.hp ?? ch.hp ?? MAX_HP;
   return { id, ch, side, x: side === 0 ? 200 : 440, y: 0, vx: 0, vy: 0, face: side === 0 ? 1 : -1, hp, maxHp: hp, meter: 0,
-    st: 'idle', t: 0, move: null, hitDone: false, combo: 0, juggle: 0, buf: [], prev: {}, lastDir: 5, inv: 0, crouch: false, alt: !!opts.alt, hitFlash: 0, specialName: null };
+    st: 'idle', t: 0, move: null, hitDone: false, combo: 0, juggle: 0, buf: [], prev: {}, lastDir: 5, inv: 0, crouch: false, skin: opts.skin || 'base', hitFlash: 0, specialName: null };
 }
 
 export function mkMatch(p1, p2, opts = {}) {
