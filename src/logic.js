@@ -208,7 +208,7 @@ export function step(m, inputs) {
   stepFighter(m, a, b); stepFighter(m, b, a); separate(m);
   if (m.phase === 'ko') {
     if (m.pt === 90) {
-      if (m.matchWinner != null) { const w = m.f[m.matchWinner], l = m.f[1 - m.matchWinner]; if (l.hp <= 0) { l.hp = 0; l.st = 'dizzy'; l.y = 0; l.vx = 0; } else l.st = 'dizzy'; w.st = 'idle'; w.buf = []; m.phase = 'finish'; m.pt = 0; say(m, 'FINISH THE BAG', 150, `${w.ch.fin.name}: tap \u2193 \u2193 + HK`); }
+      if (m.matchWinner != null) { const w = m.f[m.matchWinner], l = m.f[1 - m.matchWinner]; if (l.hp <= 0) { l.hp = 0; l.st = 'dizzy'; l.y = 0; l.vx = 0; } else l.st = 'dizzy'; w.st = 'idle'; w.buf = []; m.phase = 'finish'; m.pt = 0; say(m, 'FINISH THE BAG', 150, `${w.ch.fin.name}: tap D, D + HK`); }
       else { m.f[m.winner ?? 0] && m.winner != null && (m.f[m.winner].st = 'win'); m.phase = 'roundEnd'; m.pt = 0; }
     }
   } else if (m.phase === 'finish') {

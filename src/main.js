@@ -227,7 +227,7 @@ function drawSelect() {
     const tx = face > 0 ? x + 60 : x - 60, al = face > 0 ? 'left' : 'right';
     text(c.name.toUpperCase(), tx, 196, 10, '#ffd25a', al); text(`${c.ticker} (${c.src})`, tx, 212, 6, '#9ab0d4', al, SMALL, null);
     text(c.bio, tx, 226, 7, '#fff6e0', al, SMALL, null);
-    const S = c.specials; [[`\u2193\u2198\u2192 + P`, S.proj.name], [`\u2190\u2192 + K`, S.rush.name], [`\u2193\u2193 + P`, S.rise.name], [`SUPER \u2193\u2198\u2192 + K`, S.super.name]].forEach(([a, n], j) => text(`${a}  ${n}`, tx, 244 + j * 13, 7, j === 3 ? '#ff5aa8' : '#fff6e0', al, SMALL, null));
+    const S = c.specials; [[`D,DF,F + P`, S.proj.name], [`B,F + K`, S.rush.name], [`D,D + P`, S.rise.name], [`SUPER D,DF,F + K`, S.super.name]].forEach(([a, n], j) => text(`${a}  ${n}`, tx, 244 + j * 13, 7, j === 3 ? '#ff5aa8' : '#fff6e0', al, SMALL, null));
     text(`SKIN: ${SKINS[skin]}  (HK to cycle; ${G.owned.length} owned)`, tx, 302, 6, '#3fb6a8', al, SMALL, null);
     if (G.ready[p]) text('READY!', x, 180, 12, '#3ec46a'); };
   show(0, 60, 1); if (G.mode === 'versus') show(1, 580, -1);
@@ -253,7 +253,7 @@ function drawLadder() {
 function drawEnd(title, sub, col) { ctx.fillStyle = '#120a1e'; ctx.fillRect(0, 0, W, H); text(title, 320, 120, 26, col); sub.forEach((s, i) => text(s, 320, 170 + i * 20, 9, '#fff6e0')); if (Math.floor(G.t / 30) % 2) text('PRESS START / TAP', 320, 320, 10, '#9ab0d4'); btn(0, 0, W, H, () => menuKey('ok')); }
 function drawHelp() {
   ctx.fillStyle = '#120a1e'; ctx.fillRect(0, 0, W, H); text('HOW TO PLAY', 320, 22, 14, '#ffd25a');
-  const L = ['P1 KEYS: WASD move/jump/crouch   F light punch  G heavy punch   V light kick  B heavy kick', 'P2 KEYS: arrows   K LP   L HP   , LK   . HK     (1P can use either set)', 'HOLD BACK to block. Crouch-block lows; stand-block jump attacks.', 'THROW: forward + HP when close (unblockable)', 'SPECIALS (facing right):  \u2193\u2198\u2192+P projectile   \u2190\u2192+K rush   \u2193\u2193+P rising launcher', 'SUPER: fill the BAG METER, then \u2193\u2198\u2192+K', 'JUGGLES: crouch HP and \u2193\u2193+P launch; keep hitting while they are airborne (4 max)', 'Best of 3 rounds, 99 sec. Win the match, then FINISH THE BAG:', '   \u2193 \u2193 + HK within 3 sec for a RUG PULL finisher (cartoon, no gore)', 'TOUCH: D-pad + 4 buttons. Menus: LP = OK, LK = back, HK = cycle skin', 'P = pause, M = mute, Esc = back'];
+  const L = ['P1 KEYS: WASD move/jump/crouch   F light punch  G heavy punch   V light kick  B heavy kick', 'P2 KEYS: arrows   K LP   L HP   , LK   . HK     (1P can use either set)', 'HOLD BACK to block. Crouch-block lows; stand-block jump attacks.', 'THROW: forward + HP when close (unblockable)', 'SPECIALS (facing right):  D,DF,F+P projectile   B,F+K rush   D,D+P rising launcher', 'SUPER: fill the BAG METER, then D,DF,F+K', 'JUGGLES: crouch HP and D,D+P launch; keep hitting while they are airborne (4 max)', 'Best of 3 rounds, 99 sec. Win the match, then FINISH THE BAG:', '   D, D + HK within 3 sec for a RUG PULL finisher (cartoon, no gore)', 'TOUCH: D-pad + 4 buttons. Menus: LP = OK, LK = back, HK = cycle skin', 'P = pause, M = mute, Esc = back'];
   L.forEach((s, i) => text(s, 30, 56 + i * 24, 8, '#fff6e0', 'left', SMALL, null)); btn(0, 0, W, H, () => go('menu'));
 }
 async function shopAct(i) {
