@@ -11,6 +11,8 @@ test('roster: 10 fighters + boss, each with 3 specials + super + finisher', () =
   assert.equal(ROSTER.length, 10); assert.ok(BOSS.boss);
   for (const c of [...ROSTER, BOSS]) { for (const k of ['proj', 'rush', 'rise', 'super']) assert.ok(c.specials[k].name); assert.ok(c.fin.name); }
   assert.ok(!JSON.stringify([...ROSTER, BOSS]).match(/kombat|fatality|mortal|finish him|get over here/i));
+  assert.ok(!JSON.stringify([...ROSTER, BOSS]).match(/peng/i), 'PENGU parody removed');
+  const mm = ROSTER.find((c) => c.id === 'moneymew'); assert.ok(mm && mm.head === 'cat' && mm.fin.kind === 'litter' && mm.alt);
 });
 test('light punch damages and puts defender in hitstun', () => {
   const m = fight(); close(m); run(m, 1, { lp: 1 }); run(m, 6);
@@ -83,4 +85,11 @@ test('kibble fee split: 2% total = 1% treasury + 0.25/0.5/0.25 pools', () => {
 test('Elo + rank prizes: deterministic, zero-sum, no draws', () => {
   const [a, b] = elo(1200, 1200, 1); assert.equal(a, 1216); assert.equal(b, 1184);
   assert.ok(Math.abs(PRIZE_SHARES.reduce((s, x) => s + x, 0) - 1) < 1e-9); assert.equal(prizeFor(1, 1000), 400); assert.equal(prizeFor(11, 1000), 0);
+});
+test('Moneymew finisher runs through to match end', () => {
+  const m = mkMatch('moneymew', 'boomer', { seed: 5 }); for (let i = 0; i < 90; i++) step(m, [{}, {}]);
+  for (let r = 0; r < 2; r++) { while (m.phase !== 'fight') step(m, [{}, {}]); m.f[1].hp = 1; m.f[0].x = 300; m.f[1].x = 350; step(m, [{ lp: 1 }, {}]); for (let i = 0; i < 12; i++) step(m, [{}, {}]); }
+  for (let i = 0; i < 100; i++) step(m, [{}, {}]); assert.equal(m.phase, 'finish');
+  const fin = [{ d: 1 }, {}, { d: 1 }, { d: 1, hk: 1 }]; for (const f of fin) step(m, [f, {}]);
+  assert.equal(m.finisher.kind, 'litter'); for (let i = 0; i < 210; i++) step(m, [{}, {}]); assert.equal(m.phase, 'matchEnd');
 });

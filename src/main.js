@@ -6,6 +6,7 @@ import { unlock, sfx, music, setMuted, isMuted } from './audio.js';
 import * as K from './kibble.js';
 
 const cv = document.getElementById('game'), ctx = cv.getContext('2d'); ctx.imageSmoothingEnabled = false;
+const TOUCH = () => document.body.classList.contains('touch') && innerWidth > innerHeight;
 const H = 360, GY = 318, FONT = '"Press Start 2P", monospace', SMALL = 'Silkscreen, monospace';
 const G = { scr: 'title', t: 0, mode: 'arcade', sel: [0, 1], skinIdx: [0, 0], ready: [false, false], match: null, ladder: [], li: 0, fx: [], shake: 0, menuI: 0, msg: '', owned: ['base'], holder: false, cpuLevel: 0.5, rankOpp: null, lastRank: null, shopI: 0, paused: false };
 window.__mb = G;
@@ -132,7 +133,7 @@ function drawProj(p, t) {
     case 'wow': ctx.rotate(t / 4); for (let i = 0; i < 8; i++) { ctx.rotate(Math.PI / 4); R(0, -2, 16, 4); } R(-6, -6, 12, 12, '#fff6c0'); break;
     case 'hat': ctx.rotate(t / 3); R(-12, -4, 24, 10, '#f2a0b8'); R(-10, -8, 20, 4, '#d0708e'); R(-2, -12, 4, 4, '#d0708e'); break;
     case 'bat': ctx.rotate(t / 2.5); R(-16, -3, 32, 6, '#8a5a34'); R(4, -4, 12, 8, '#a8743e'); break;
-    case 'snow': for (const [a, b, r] of [[0, 4, 9], [0, -7, 6]]) { ctx.fillStyle = '#f4f8ff'; ctx.beginPath(); ctx.arc(a, b, r, 0, 7); ctx.fill(); } break;
+    case 'coin': { const w = Math.abs(Math.cos(t / 4)) * 11 + 2; ctx.fillStyle = '#a8801e'; ctx.fillRect(-w, -12, w * 2, 24); ctx.fillStyle = '#ffd25a'; ctx.fillRect(-w + 2, -10, w * 2 - 4, 20); if (w > 6) { ctx.fillStyle = '#a8801e'; ctx.fillRect(-2, -6, 4, 12); } break; }
     case 'gas': for (let i = 0; i < 5; i++) { ctx.fillStyle = i % 2 ? '#9cc46a' : '#b8dc8a'; ctx.beginPath(); ctx.arc(Math.cos(t / 6 + i) * 8, Math.sin(t / 5 + i * 2) * 8, 9, 0, 7); ctx.fill(); } break;
     case 'fish': R(-12, -5, 20, 10); R(8, -8, 6, 16); R(-8, -2, 3, 3, '#141418'); break;
     case 'snort': for (let i = 0; i < 4; i++) { ctx.fillStyle = 'rgba(240,240,240,.8)'; ctx.beginPath(); ctx.arc(-i * 7, Math.sin(t / 3 + i) * 3, 8 - i, 0, 7); ctx.fill(); } break;
@@ -159,11 +160,11 @@ function hud(m) {
     bar(bx, 14, 220, 16, f.ghostHp / f.maxHp, '#c8282e', '#3a1420', flip); ctx.fillStyle = f.hp / f.maxHp > 0.3 ? '#ffd25a' : '#ff7a4a'; const fw = Math.round(220 * f.hp / f.maxHp); ctx.fillRect(flip ? bx + 220 - fw : bx, 14, fw, 16); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(flip ? bx + 220 - fw : bx, 14, fw, 3);
     text(f.ch.name.toUpperCase(), flip ? 580 : 60, 40, 8, '#fff6e0', flip ? 'right' : 'left');
     for (let w = 0; w < 2; w++) { const wx = flip ? 368 + w * 14 : 270 - w * 14; ctx.fillStyle = '#1a1420'; ctx.fillRect(wx - 1, 35, 12, 12); ctx.fillStyle = m.wins[i] > w ? '#ffd25a' : '#3a3450'; ctx.fillRect(wx, 36, 10, 10); }
-    const full = f.meter >= 100; bar(flip ? 420 : 20, 338, 200, 10, f.meter / 100, full ? (m.tick % 10 < 5 ? '#ff5aa8' : '#7ad3f0') : '#3fb6a8', '#142030', flip);
-    text(full ? 'SUPER READY' : 'BAG METER', flip ? 620 : 20, 326, 7, full ? '#ff5aa8' : '#9ab0d4', flip ? 'right' : 'left', FONT);
+    const full = f.meter >= 100, my = TOUCH() ? 62 : 338; bar(TOUCH() ? (flip ? 420 : 60) : (flip ? 420 : 20), my, TOUCH() ? 160 : 200, TOUCH() ? 7 : 10, f.meter / 100, full ? (m.tick % 10 < 5 ? '#ff5aa8' : '#7ad3f0') : '#3fb6a8', '#142030', flip);
+    text(full ? 'SUPER READY' : 'BAG METER', TOUCH() ? (flip ? 416 : 224) : (flip ? 620 : 20), TOUCH() ? 65 : 326, TOUCH() ? 6 : 7, full ? '#ff5aa8' : '#9ab0d4', TOUCH() ? (flip ? 'right' : 'left') : (flip ? 'right' : 'left'), FONT);
     if (f.combo >= 2) text(`${f.combo} HITS`, flip ? 560 : 80, 90, 12, '#ffd25a'); }
   panel(296, 8, 48, 34, '#121a36'); text(String(Math.max(0, Math.ceil(m.timer / 60))).padStart(2, '0'), 320, 26, 16, m.timer < 600 ? '#ff7a4a' : '#fff6e0');
-  text(STAGES[m.stage] || '', 320, 52, 7, '#9ab0d4', 'center', SMALL);
+  text(STAGES[m.stage] || '', 320, TOUCH() ? 76 : 52, 7, '#9ab0d4', 'center', SMALL);
   if (m.banner) { const k = m.banner.t / m.banner.max, sc = 1 + Math.max(0, (k - 0.85)) * 3; ctx.save(); ctx.translate(320, 150); ctx.scale(sc, sc); const len = m.banner.text.length, size = len > 16 ? 18 : len > 10 ? 24 : 34;
     ctx.fillStyle = 'rgba(18,10,30,.55)'; ctx.fillRect(-320, -size, 640, size * 2 + (m.banner.sub ? 22 : 0)); text(m.banner.text, 0, 0, size, m.banner.text.includes('RUG') || m.banner.text.includes('FINISH') ? '#ff5a5a' : '#ffd25a'); if (m.banner.sub) text(m.banner.sub, 0, size + 6, 9, '#fff6e0'); ctx.restore(); }
   if (m.phase === 'finish') { const w = m.f[m.matchWinner], left = Math.ceil((180 - m.pt) / 60); text(`${left}`, 320, 230, 20, '#ff5a5a'); if (G.mode !== 'versus' && m.matchWinner === 1) {} }
@@ -177,6 +178,7 @@ function finisherLoser(m, f) {
     case 'moon': return t < 40 ? {} : { dy: -Math.pow(t - 40, 1.8) * 0.4, rot: 0, scale: Math.max(0.2, 1 - (t - 40) / 160) };
     case 'hat': return { sy: t > 40 ? Math.max(0.15, 1 - (t - 40) / 40) : 1, hide: t > 130 };
     case 'bonk': return { dy: t > 46 ? Math.min(90, (t - 46) * 3) : 0, filter: t > 46 ? 'brightness(.8)' : null };
+    case 'litter': return { dy: t > 50 ? Math.min(110, (t - 50) * 2.5) : 0, hide: t > 110 };
     case 'freeze': return { filter: t > 20 ? 'hue-rotate(180deg) saturate(.5) brightness(1.4)' : null, dx: t > 90 ? (t - 90) * (t - 90) * 0.06 * -f.face : 0 };
     case 'gas': return { filter: t > 30 ? 'hue-rotate(70deg) saturate(1.6)' : null, dy: t > 80 ? -(t - 80) * 2 : 0, rot: t > 80 ? Math.sin(t / 8) * 0.4 : 0 };
     case 'seal': return { hide: t > 70 };
@@ -191,6 +193,7 @@ function finisherOverlay(m) {
   if (k === 'moon') { if (t > 30) { ctx.fillStyle = '#ff7a4a'; for (let i = 0; i < 6; i++) ctx.fillRect(x - 6 + Math.random() * 12, GY + Math.pow(Math.max(0, t - 40), 1.8) * -0.4 + i * 8, 6, 8); } ctx.fillStyle = '#f6e7b8'; ctx.beginPath(); ctx.arc(520, 50, 26, 0, 7); ctx.fill(); if (t > 150) text('WOW', 520, 50, 10, '#c8282e', 'center', FONT, null); }
   if (k === 'hat') { const hy = Math.min(GY - 60, -100 + t * 6); ctx.fillStyle = '#f2a0b8'; ctx.fillRect(x - 44, hy - 30, 88, 60); ctx.fillStyle = '#d0708e'; for (let i = 0; i < 6; i++) ctx.fillRect(x - 40 + i * 14, hy - 26, 6, 52); ctx.fillRect(x - 10, hy - 44, 20, 14); if (t > 120) { ctx.translate(0, 0); } }
   if (k === 'bonk') { const a = t < 46 ? -2 + t / 23 : 0; ctx.save(); ctx.translate(x, GY - 220); ctx.rotate(a); ctx.fillStyle = '#8a5a34'; ctx.fillRect(-14, 0, 28, 180); ctx.fillStyle = '#a8743e'; ctx.fillRect(-20, 100, 40, 90); ctx.restore(); if (t > 46 && t < 120) text('BONK!', x, GY - 150, 26, '#ffd25a'); }
+  if (k === 'litter') { const s = Math.min(1, t / 30); ctx.fillStyle = '#3fb68a'; ctx.fillRect(x - 70 * s, GY - 30 * s, 140 * s, 34 * s); ctx.fillStyle = '#d8c89a'; ctx.fillRect(x - 64 * s, GY - 26 * s, 128 * s, 8 * s); ctx.fillStyle = '#2a8462'; ctx.fillRect(x - 70 * s, GY - 4, 140 * s, 6); if (t > 110) { for (let i = 0; i < 12; i++) { ctx.fillStyle = '#d8c89a'; ctx.fillRect(x - 50 + ((i * 29 + t) % 100), GY - 30 - Math.abs(Math.sin((t + i * 9) / 7)) * 30, 4, 4); } text('SCOOPED', x, GY - 70, 14, '#3fb68a'); } }
   if (k === 'freeze' && t > 20) { ctx.fillStyle = 'rgba(180,230,255,.5)'; const dx = t > 90 ? (t - 90) * (t - 90) * 0.06 * -l.face : 0; ctx.fillRect(x - 40 + dx, GY - 130, 80, 132); ctx.strokeStyle = '#e8fbff'; ctx.lineWidth = 3; ctx.strokeRect(x - 40 + dx, GY - 130, 80, 132); }
   if (k === 'gas') for (let i = 0; i < 14; i++) { const r = Math.min(70, t * 1.2); ctx.fillStyle = `rgba(156,196,106,${0.5})`; ctx.beginPath(); ctx.arc(x + Math.cos(i + t / 20) * r, GY - 60 + Math.sin(i * 2 + t / 15) * r * 0.6 - (t > 80 ? (t - 80) * 2 : 0), 20, 0, 7); ctx.fill(); }
   if (k === 'seal') { const s = Math.min(1, t / 40); ctx.fillStyle = '#f4ead0'; ctx.fillRect(x - 60 * s, GY - 110 * s, 120 * s, 110 * s); ctx.strokeStyle = '#c8b48a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 60 * s, GY - 110 * s); ctx.lineTo(x, GY - 50 * s); ctx.lineTo(x + 60 * s, GY - 110 * s); ctx.stroke(); if (t > 70) { ctx.fillStyle = '#c8282e'; ctx.beginPath(); ctx.arc(x, GY - 50, 16, 0, 7); ctx.fill(); text('SEALED', x, GY - 140, 14, '#c8282e'); } if (t > 120) ctx.globalAlpha = 1; }
@@ -202,6 +205,7 @@ function finisherOverlay(m) {
 // ---------------- screen renderers ----------------
 function drawTitle() {
   ctx.drawImage(stageCanvas('mall'), 0, 0); ctx.fillStyle = 'rgba(6,4,20,.55)'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(10,6,24,.92)'; ctx.fillRect(0, 26, W, 146); ctx.fillStyle = '#d4a640'; ctx.fillRect(0, 26, W, 2); ctx.fillRect(0, 170, W, 2);
   const b = Math.sin(G.t / 20) * 3; text('MEME', 320, 70 + b, 44, '#ffd25a'); text('BRAWL', 320, 120 + b, 44, '#ff5a5a'); text('BAG  BRAWLERS  OF  THE  KIBBLE  VERSE', 320, 158, 8, '#fff6e0');
   ROSTER.forEach((c, i) => drawSprite(c, Math.floor(G.t / 24 + i) % 2 ? 'idle' : 'idle2', 'base', 40 + i * 62, 306, 1.4, i < 5 ? 1 : -1));
   if (Math.floor(G.t / 30) % 2) text('PRESS START / TAP', 320, 330, 12, '#fff6e0');
@@ -272,7 +276,7 @@ function drawShop() {
   [['Treasury 1%', f.treasury, 'BzLY..TNGJ'], ['Daily pool 0.25%', f.daily, ''], ['Weekly pool 0.5%', f.weekly, ''], ['Monthly pool 0.25%', f.monthly, '']].forEach(([n, v, a], j) => text(`${n}: ${K.fromBase(v)} ${a}`, 350, 92 + j * 16, 7, '#fff6e0', 'left', SMALL, null));
   text(`Treasury: ${K.TREASURY.slice(0, 22)}`, 350, 160, 6, '#9ab0d4', 'left', SMALL, null); text(`          ${K.TREASURY.slice(22)}`, 350, 172, 6, '#9ab0d4', 'left', SMALL, null);
   const P = K.poolsUi(); text(`Pools: D ${P.daily.toFixed(2)}  W ${P.weekly.toFixed(2)}  M ${P.monthly.toFixed(2)}`, 350, 194, 6, '#3fb6a8', 'left', SMALL, null);
-  drawSprite(byId('inu'), 'idle', it.id, 400, 340, 1.6, 1); drawSprite(byId('peepo'), 'idle', it.id, 460, 340, 1.6, 1); drawSprite(byId('pengo'), 'idle', it.id, 520, 340, 1.6, -1);
+  drawSprite(byId('inu'), 'idle', it.id, 400, 340, 1.6, 1); drawSprite(byId('peepo'), 'idle', it.id, 460, 340, 1.6, 1); drawSprite(byId('moneymew'), 'idle', it.id, 520, 340, 1.6, -1);
   text(`BALANCE: ${G.bal ?? '-'} KIBBLE   HOLDER: ${G.holder ? 'YES (alts unlocked)' : 'no (needs 1000)'}`, 30, 250, 7, '#fff6e0', 'left', SMALL, null);
   // ranked board
   panel(30, 266, 290, 84, '#121a36', '#4a4f8c'); const lb = K.leaderboard(), me = lb.find((e) => e.you), pool = P.weekly;

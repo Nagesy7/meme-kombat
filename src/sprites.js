@@ -80,9 +80,13 @@ function head(G, ch, pal, hx, hy, pose) {
       R(8, 2, 3, 1, C.dark); R(14, 2, 3, 1, C.dark);
       R(9, 11, 12, 1, '#7a2e2e'); R(12, 12, 8, 1, hurt ? '#7a2e2e' : C.light); S(20, 10, '#7a2e2e'); R(4, 8, 1, 6, C.dark); S(19, 8, C.dark); break;
     }
-    case 'pengu': {
-      D(11, 8, 7, C.base); R(8, 5, 9, 9, C.light); D(14, 8, 4, C.light); R(18, 9, 4, 2, '#f2a33a'); R(18, 11, 3, 1, '#c87a1a');
-      R(14, 6, 2, 2, INK); if (hurt) { S(13, 6, INK); S(16, 8, INK); } S(15, 6, '#fff'); R(10, 11, 2, 1, '#f0a8a8'); R(4, 6, 1, 6, C.dark); break;
+    case 'cat': {
+      R(5, 4, 13, 10, C.base); R(4, 6, 1, 7, C.base); R(17, 6, 2, 7, C.base); R(6, 14, 11, 1, C.base);
+      R(5, 0, 3, 4, C.base); S(6, -1, C.base); S(6, 1, C.ear); S(6, 2, C.ear); R(13, 0, 3, 4, C.base); S(14, -1, C.base); S(14, 1, C.ear); S(14, 2, C.ear);
+      for (const x of [8, 10, 12]) R(x, 4, 1, 3, C.dark); R(5, 8, 2, 1, C.dark); R(5, 11, 2, 1, C.dark);
+      R(13, 9, 6, 5, C.light); R(9, 12, 5, 3, C.light); S(19, 10, '#e8a0b4'); S(18, 12, MOUTH); S(17, 13, MOUTH);
+      if (hurt) { S(14, 7, INK); S(15, 6, INK); S(15, 8, INK); } else { R(14, 6, 2, 3, '#7ad36a'); R(15, 6, 1, 3, INK); }
+      for (const y of [11, 13]) { S(20, y, '#f4f0e8'); S(21, y, '#f4f0e8'); } R(4, 7, 1, 5, C.dark); break;
     }
     case 'toot': {
       D(11, 9, 7, C.base); R(6, 13, 12, 3, C.base); R(14, 7, 2, 2, INK); S(15, 7, '#fff'); R(13, 6, 4, 1, C.dark);
@@ -133,6 +137,7 @@ function paint(ch, poseName, skin) {
   if (ch.head === 'shiba' || ch.head === 'doge' || ch.head === 'wif' || ch.head === 'bonk') { // curled tail
     const tx = hipX - 8 - Math.sin(lean) * 2, ty = hipY - 6; rect(tx - 2, ty, 4, 3, pal.base); set(tx - 3, ty + 1, pal.base); set(tx - 1, ty - 1, pal.base); set(tx, ty - 1, pal.base); set(tx - 1, ty + 1, pal.light); set(tx, ty + 1, pal.light);
   }
+  if (ch.head === 'cat') { const tx = hipX - 7, ty = hipY - 2; for (let i = 0; i < 9; i++) set(tx - Math.round(Math.sin(i / 3) * 3), ty - i, i % 3 === 2 ? pal.dark : pal.base), set(tx - Math.round(Math.sin(i / 3) * 3) - 1, ty - i, pal.base); }
   if (ch.head === 'whale') { rect(hipX - 10, hipY - 2, 5, 4, pal.base); rect(hipX - 14, hipY - 5, 5, 3, pal.base); rect(hipX - 14, hipY + 2, 5, 3, pal.base); }
   // torso
   const tw = 13 + big * 4;
@@ -145,8 +150,9 @@ function paint(ch, poseName, skin) {
   if (ch.id === 'inu' && skin !== 'alt') { for (let i = 0; i < 10; i++) { const [x, y] = at(0.95 - i * 0.07, 3); set(x, y, '#f7e6c8'); } for (let i = 0; i < 9; i++) { const [x, y] = at(0.92 - i * 0.07, 3); set(x + (i < 2 ? 0 : 0), y, i === 0 ? '#f7e6c8' : pal.acc); }
     for (let i = 0; i < 13; i++) { const [x, y] = at(0.9 - i * 0.065, -4 + i * 0.75); set(x, y, i % 4 === 0 ? '#c8282e' : '#e8d8b0'); } }
   else if (ch.id === 'inu') { for (let i = 0; i < 9; i++) { const [x, y] = at(0.92 - i * 0.07, 3); set(x, y, pal.acc); } }
-  if (ch.head === 'pengu' || ch.head === 'seal') for (let i = 1; i < torsoL - 1; i++) { const [x, y] = at(i / torsoL, 2); rect(x - 1, y, 5, 1, pal.light); }
+  if (ch.head === 'seal') for (let i = 1; i < torsoL - 1; i++) { const [x, y] = at(i / torsoL, 2); rect(x - 1, y, 5, 1, pal.light); }
   if (ch.head === 'frog' || ch.head === 'boomer') for (let i = 2; i < torsoL; i += 4) { const [x, y] = at(i / torsoL, 3); set(x, y, '#ffffff'); }
+  if (ch.id === 'moneymew') { const [x, y] = at(0.92, 0); for (let d = -3; d <= 3; d++) set(x + d, y + Math.abs(d) * 0.5, pal.acc); rect(x - 1, y + 2, 3, 3, pal.acc); set(x, y + 3, '#fff1b0'); }
   if (ch.id === 'bullencia') { const [x, y] = at(0.6, 0); rect(x - 3, y, 7, 2, pal.acc); }
   if (ch.id === 'muchwow' || ch.id === 'sealbert') { const [x, y] = at(0.95, 2); rect(x - 3, y, 6, 1, pal.acc); }
   if (ch.head === 'whale') { const [x, y] = at(0.9, 3); rect(x - 1, y, 2, 8, pal.acc); for (let i = 0; i < 3; i++) set(at(0.6 - i * 0.2, 1)[0], at(0.6 - i * 0.2, 1)[1], '#e3b341'); }

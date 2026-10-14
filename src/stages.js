@@ -9,7 +9,7 @@ function floorTiles(c, y, a, b, line) { R(c, 0, y, 320, 180 - y, a); for (let j 
 
 const PAINT = {
   mall(c) {
-    grad(c, 0, 130, ['#070b22', '#141a46', '#2a2060']); stars(c, 70, 3, 80);
+    grad(c, 0, 136, ['#070b22', '#141a46', '#2a2060']); stars(c, 70, 3, 80);
     R(c, 262, 18, 14, 14, '#f6e7b8'); R(c, 264, 16, 10, 18, '#f6e7b8'); R(c, 268, 20, 3, 3, '#e0d0a0');
     // skyline
     const r = rng(9); for (let x = 0; x < 320; x += 14 + Math.floor(r() * 10)) { const h = 30 + r() * 40, w = 12 + r() * 10; R(c, x, 120 - h, w, h, '#161a3a'); for (let wy = 120 - h + 4; wy < 116; wy += 5) for (let wx = x + 2; wx < x + w - 2; wx += 4) if (r() < 0.35) R(c, wx, wy, 2, 2, '#e8c46a'); }
@@ -25,7 +25,7 @@ const PAINT = {
     floorTiles(c, 134, '#3a3466', '#8a7ac8', '#2c2852'); R(c, 120, 134, 80, 4, '#4a8ac8');
   },
   canyon(c) {
-    grad(c, 0, 130, ['#2a0e3a', '#a83a4a', '#f2a04a']); R(c, 200, 30, 30, 30, '#ffd88a'); R(c, 196, 34, 38, 22, '#ffd88a');
+    grad(c, 0, 136, ['#2a0e3a', '#a83a4a', '#f2a04a']); R(c, 200, 30, 30, 30, '#ffd88a'); R(c, 196, 34, 38, 22, '#ffd88a');
     const r = rng(5); let v = 90;
     for (let x = 0; x < 320; x += 10) { const up = r() < 0.58; const d = (r() * 18) * (up ? -1 : 1); const o = v, cl = v + d; v = Math.max(30, Math.min(110, cl)); const top = Math.min(o, v), bot = Math.max(o, v); const col = up ? '#3ec46a' : '#e04a5a';
       R(c, x + 4, top - 6 - r() * 6, 1, bot - top + 14, col); R(c, x + 1, top, 7, Math.max(2, bot - top), col); R(c, x + 1, top, 2, Math.max(2, bot - top), 'rgba(255,255,255,.25)'); }
@@ -69,7 +69,7 @@ const PAINT = {
 
 export function stageCanvas(id) {
   if (cache[id]) return cache[id];
-  const lo = mk(320, 180), c = lo.getContext('2d'); c.imageSmoothingEnabled = false; (PAINT[id] || PAINT.mall)(c);
+  const lo = mk(320, 180), c = lo.getContext('2d'); c.imageSmoothingEnabled = false; c.fillStyle = '#120a1e'; c.fillRect(0, 0, 320, 180); (PAINT[id] || PAINT.mall)(c);
   const hi = mk(640, 360), h = hi.getContext('2d'); h.imageSmoothingEnabled = false; h.drawImage(lo, 0, 0, 640, 360);
   return (cache[id] = hi);
 }

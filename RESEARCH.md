@@ -20,19 +20,20 @@ All data pulled live on 2026-10-14 ~23:55 AEDT (12:55 UTC). Trending lists churn
 | Muchwow | DOGE (the Shiba photo meme) | #2 meme by volume | CoinGecko meme volume |
 | Wiffy | dogwifhat (WIF) | top-10 meme by volume | CoinGecko meme volume |
 | Bonkus | BONK | top-10 meme by volume | CoinGecko meme volume |
-| Pengo | Pudgy Penguins (PENGU) | on CoinGecko trending and GeckoTerminal trending | CG trending + GT trending |
+| Moneymew | CASHCAT (a generic cash cat meme on Robinhood chain) | GeckoTerminal trending pool #7 on 14 Oct, still #7 when re-checked 15 Oct 00:20 AEDT | GeckoTerminal |
 | Toot Lord | Fartcoin | top-11 meme by volume | CoinGecko meme volume |
 | Sealbert | SEALS (Solana) | GeckoTerminal trending pool #4 | GeckoTerminal |
 | Bullencia | BULLENCIAGA (pump.fun) | top-2 live pump.fun coin by mcap | pump.fun |
 | Boomer Bob | Boomer (BOOMER) | #1 meme by 24h volume | CoinGecko meme volume |
 | BOSS: Lord Rugsworth | original villain (a rug-pull whale) | arcade boss, not a coin | original |
 
-Left out: Official Trump (a real-person likeness, so a right-of-publicity risk), Mubarak (a real-person/region reference), and the DexScreener boosted coins (paid placement, not organic trend).
+Left out: PENGU (enforced NFT IP, swapped out for Moneymew), Official Trump (a real-person likeness, so a right-of-publicity risk), Mubarak (a real-person/region reference), and the DexScreener boosted coins (paid placement, not organic trend).
 
 ## IP sensitivity notes
 - **Pepe the Frog**: Matt Furie holds the copyright and has enforced it (for example in 2018-2019 actions). Peepo is a different frog design (round head, no Pepe lip shape, a different green), with no copied artwork. Medium risk. Keep it parody and never use the original comic art.
 - **Doge**: the Kabosu photo is copyrighted by Atsuko Sato. Muchwow is our own pixel Shiba (golden coat, side-eye brows). No photo is used. Low-to-medium risk.
 - **dogwifhat**: the original photo of Achi in a pink beanie belongs to its owners. We draw an original dog with a knit hat. Low risk.
-- **Pudgy Penguins**: an NFT IP owned by Igloo Inc. that is actively licensed and enforced. **Highest commercial risk.** Pengo is a generic penguin; avoid Pudgy's exact proportions and colourways. Consider swapping it out before any commercial launch.
-- **BONK, Fartcoin, SEALS, BULLENCIAGA, Boomer**: community memes with no known enforcement. Bullencia avoids any Balenciaga mark or logo; the name is a parody (trademark is a parody-name risk, low).
+- **PENGU (Pudgy Penguins)**: Igloo Inc. actively licenses and enforces this IP, so our penguin parody was **removed** on 15 Oct 2026 (approved by Zachary).
+- **Moneymew (replacement)**: parodies CASHCAT, a small anonymous community coin with no known brand owner, no real person and no enforcement history. The art is an original lilac-grey tabby with a mint jacket, a gold chain and green eyes, and it doesn't copy the token's logo. Low risk.
+- **BONK, Fartcoin, SEALS, BULLENCIAGA, Boomer, CASHCAT**: community memes with no known enforcement. Bullencia avoids any Balenciaga mark or logo; the name is a parody (trademark is a parody-name risk, low).
 - **Mortal Kombat**: none of its names, logos, characters or sounds are used. The terms we use are "Rug Pull", "FINISH THE BAG" and "BAG SECURED".
