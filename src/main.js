@@ -283,12 +283,19 @@ function drawShop() {
 
 // ---------------- loop ----------------
 function update() {
-  readPads(); G.t++;
+  readPads(); G.t++; const scr = G.scr;
+  if (scr !== 'fight') { updateMenus(scr); return; }
+  updateFight();
+}
+function updateMenus(scr) {
+  const G2 = { scr }; if (G2.scr !== G.scr) return;
   if (G.scr === 'menu') { if (edge(0, 'u')) menuKey('up'); if (edge(0, 'd')) menuKey('down'); if (edge(0, 'lp') || edge(0, 'hp')) menuKey('ok'); }
-  if (G.scr === 'shop') { if (edge(0, 'u')) menuKey('up'); if (edge(0, 'd')) menuKey('down'); if (edge(0, 'lp')) menuKey('ok'); }
-  if ((G.scr === 'ladder' || G.scr === 'gameover' || G.scr === 'ending' || G.scr === 'rankres') && G.t > 20 && (edge(0, 'lp') || edge(0, 'hp'))) menuKey('ok');
-  if (G.scr === 'title' && G.t > 10 && (edge(0, 'lp') || edge(0, 'hp'))) menuKey('ok');
-  if (G.scr === 'select') selectStep();
+  else if (G.scr === 'shop') { if (edge(0, 'u')) menuKey('up'); if (edge(0, 'd')) menuKey('down'); if (edge(0, 'lp')) menuKey('ok'); }
+  else if ((G.scr === 'ladder' || G.scr === 'gameover' || G.scr === 'ending' || G.scr === 'rankres') && G.t > 20 && (edge(0, 'lp') || edge(0, 'hp'))) menuKey('ok');
+  else if (G.scr === 'title' && G.t > 10 && (edge(0, 'lp') || edge(0, 'hp'))) menuKey('ok');
+  else if (G.scr === 'select') selectStep();
+}
+function updateFight() {
   if (G.scr === 'fight' && !G.paused) {
     const m = G.match, i0 = pads[0], i1 = G.mode === 'versus' ? pads[1] : cpuInput(m, 1, G.cpuLevel); step(m, [i0, i1]);
     for (const ev of m.events) spawnFx(ev); m.events.length = 0;

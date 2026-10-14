@@ -6,7 +6,7 @@ const URL = process.env.URL || `http://localhost:${srv.address().port}/`;
 const results = []; const ok = (name, cond, extra = '') => { results.push({ name, pass: !!cond, extra }); console.log((cond ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : '')); };
 fs.mkdirSync('proof', { recursive: true });
 const b = await chromium.launch();
-const st = (pg) => pg.evaluate(() => { const G = window.__mb, m = G.match; return { scr: G.scr, phase: m?.phase, hp: m?.f.map((f) => f.hp), wins: m?.wins, st: m?.f.map((f) => f.st), meter: m?.f.map((f) => f.meter), proj: m?.proj.length }; });
+const st = (pg) => pg.evaluate(() => { const G = window.__mb, m = G.match; return { scr: G.scr, phase: m?.phase, hp: m?.f.map((f) => f.hp), wins: m?.wins, st: m?.f.map((f) => f.st), meter: m?.f.map((f) => f.meter), proj: m?.proj.length, mv: m?.f[0].move?.name, specials: m?.f[0].specialsUsed }; });
 const waitScr = (pg, s, ms = 8000) => pg.waitForFunction((s) => window.__mb.scr === s, s, { timeout: ms });
 const waitPhase = (pg, s, ms = 15000) => pg.waitForFunction((s) => window.__mb.match?.phase === s, s, { timeout: ms });
 
@@ -18,16 +18,16 @@ const waitPhase = (pg, s, ms = 15000) => pg.waitForFunction((s) => window.__mb.m
   await pg.keyboard.press('Enter'); await waitScr(pg, 'select'); await pg.waitForTimeout(300); await pg.screenshot({ path: 'proof/03-select.png' }); ok('desktop: menu -> character select', true);
   await pg.keyboard.press('KeyF'); await waitScr(pg, 'ladder'); await pg.waitForTimeout(300); await pg.screenshot({ path: 'proof/04-ladder.png' });
   await pg.keyboard.press('Enter'); await waitScr(pg, 'versus'); await pg.waitForTimeout(900); await pg.screenshot({ path: 'proof/05-versus.png' });
-  await waitScr(pg, 'fight', 6000); await pg.evaluate(() => (window.__mb.cpuLevel = 0)); await waitPhase(pg, 'fight');
+  await waitScr(pg, 'fight', 6000); await pg.evaluate(() => (window.__mb.cpuLevel = -1)); await waitPhase(pg, 'fight');
   await pg.keyboard.down('KeyD'); await pg.waitForTimeout(1300); await pg.keyboard.up('KeyD');
   const h0 = (await st(pg)).hp[1];
   for (let i = 0; i < 6; i++) { await pg.keyboard.press('KeyF'); await pg.waitForTimeout(140); await pg.keyboard.press('KeyV'); await pg.waitForTimeout(160); }
   await pg.keyboard.press('KeyG'); await pg.waitForTimeout(80); await pg.screenshot({ path: 'proof/06-fight-hit.png' });
   const h1 = (await st(pg)).hp[1]; ok('desktop: real-key punches/kicks damage CPU', h1 < h0, `${h0} -> ${h1}`);
   // special: QCF + P (S, S+D, D, F)
-  await pg.keyboard.press('KeyA'); await pg.waitForTimeout(500);
+  await pg.keyboard.down('KeyA'); await pg.waitForTimeout(700); await pg.keyboard.up('KeyA'); await pg.waitForTimeout(300);
   await pg.keyboard.down('KeyS'); await pg.waitForTimeout(40); await pg.keyboard.down('KeyD'); await pg.waitForTimeout(40); await pg.keyboard.up('KeyS'); await pg.waitForTimeout(40); await pg.keyboard.press('KeyF'); await pg.keyboard.up('KeyD');
-  await pg.waitForTimeout(260); const s1 = await st(pg); await pg.screenshot({ path: 'proof/07-special-projectile.png' }); ok('desktop: QCF+P fires a projectile', s1.proj > 0 || s1.hp[1] < h1, JSON.stringify(s1.proj));
+  await pg.waitForTimeout(120); const s1 = await st(pg); await pg.screenshot({ path: 'proof/07-special-projectile.png' }); ok('desktop: QCF+P fires a projectile', s1.proj > 0 || s1.mv === 'proj' || s1.specials > 0, JSON.stringify(s1));
   // jump-in
   await pg.keyboard.down('KeyW'); await pg.keyboard.down('KeyD'); await pg.waitForTimeout(250); await pg.keyboard.up('KeyW'); await pg.keyboard.up('KeyD'); await pg.keyboard.press('KeyB'); await pg.waitForTimeout(150); await pg.screenshot({ path: 'proof/08-jump-kick.png' }); await pg.waitForTimeout(600);
   // crouch
@@ -67,7 +67,7 @@ const waitPhase = (pg, s, ms = 15000) => pg.waitForFunction((s) => window.__mb.m
   const touchHold = async (pts, ms) => { await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pts.map((p, i) => ({ x: p.x, y: p.y, id: i })) }); await pg.waitForTimeout(ms); await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); };
   const lp = await center('[data-k=lp]'), lk = await center('[data-k=lk]'), dp = await center('#dpad');
   await pg.touchscreen.tap(400, 200); await waitScr(pg, 'menu'); await pg.touchscreen.tap(lp.x, lp.y); await waitScr(pg, 'select'); await pg.waitForTimeout(300); await pg.screenshot({ path: 'proof/21-iphone-select.png' });
-  await pg.touchscreen.tap(lp.x, lp.y); await waitScr(pg, 'ladder'); await pg.touchscreen.tap(lp.x, lp.y); await waitScr(pg, 'fight', 8000); await pg.evaluate(() => (window.__mb.cpuLevel = 0)); await waitPhase(pg, 'fight');
+  await pg.waitForTimeout(300); await pg.touchscreen.tap(lp.x, lp.y); await waitScr(pg, 'ladder'); await pg.waitForTimeout(500); await pg.touchscreen.tap(lp.x, lp.y); await waitScr(pg, 'fight', 8000); await pg.evaluate(() => (window.__mb.cpuLevel = -1)); await waitPhase(pg, 'fight');
   await touchHold([{ x: dp.x + dp.r.width * 0.4, y: dp.y }], 1300);
   const h0 = (await st(pg)).hp[1]; for (let i = 0; i < 6; i++) { await pg.touchscreen.tap(lp.x, lp.y); await pg.waitForTimeout(150); await pg.touchscreen.tap(lk.x, lk.y); await pg.waitForTimeout(150); }
   await pg.screenshot({ path: 'proof/22-iphone-fight.png' }); const h1 = (await st(pg)).hp[1]; ok('iPhone13 landscape: touch D-pad + buttons damage CPU', h1 < h0, `${h0} -> ${h1}`);

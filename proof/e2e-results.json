@@ -1,0 +1,62 @@
+[
+  {
+    "name": "desktop: menu -> character select",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: real-key punches/kicks damage CPU",
+    "pass": true,
+    "extra": "1000 -> 845"
+  },
+  {
+    "name": "desktop: QCF+P fires a projectile",
+    "pass": true,
+    "extra": "{\"scr\":\"fight\",\"phase\":\"fight\",\"hp\":[1000,845],\"wins\":[0,0],\"st\":[\"attack\",\"idle\"],\"meter\":[16,8],\"proj\":0,\"mv\":\"proj\",\"specials\":1}"
+  },
+  {
+    "name": "desktop: best-of-3 reaches FINISH THE BAG",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: down-down+HK triggers Rug Pull finisher",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: ladder advances after win",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: wallet connect + buy skin (simulated, 2% fee ledger)",
+    "pass": true,
+    "extra": "[\"gold\"]"
+  },
+  {
+    "name": "desktop: local 2P, P2 keys (arrows + K) hit P1",
+    "pass": true,
+    "extra": "1000 -> 880"
+  },
+  {
+    "name": "desktop: no page errors",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "iPhone13 landscape: touch D-pad + buttons damage CPU",
+    "pass": true,
+    "extra": "1000 -> 840"
+  },
+  {
+    "name": "iPhone13: no scroll / selection",
+    "pass": true,
+    "extra": "{\"sx\":0,\"sy\":0,\"sel\":\"\",\"w\":750,\"iw\":750}"
+  },
+  {
+    "name": "iPhone13: no page errors",
+    "pass": true,
+    "extra": ""
+  }
+]

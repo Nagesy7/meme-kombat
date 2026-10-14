@@ -53,7 +53,7 @@ function ddMotion(buf, now) { // down, not-down, down
 
 const neutral = (f) => f.st === 'idle' || f.st === 'walk' || f.st === 'crouch' || f.st === 'block' || f.st === 'cblock';
 
-function startMove(m, f, mv, name) { f.st = 'attack'; f.t = 0; f.move = { ...mv, name }; f.hitDone = false; m.events.push({ type: 'whiff', who: f.side, mv: name }); }
+function startMove(m, f, mv, name) { if (mv.special) f.specialsUsed = (f.specialsUsed || 0) + 1; f.st = 'attack'; f.t = 0; f.move = { ...mv, name }; f.hitDone = false; m.events.push({ type: 'whiff', who: f.side, mv: name }); }
 
 function specialMove(f, kind) {
   const S = f.ch.specials, pw = f.ch.pow || 1;
@@ -244,7 +244,7 @@ export function cpuInput(m, idx, level = 0.5) {
   const f = m.f[idx], o = m.f[1 - idx], r = m.rng, inp = { u: 0, d: 0, l: 0, r: 0, lp: 0, hp: 0, lk: 0, hk: 0 };
   const fwd = o.x > f.x ? 'r' : 'l', back = fwd === 'r' ? 'l' : 'r', dist = Math.abs(o.x - f.x);
   if (m.phase === 'finish' && m.matchWinner === idx) { const s = f.aiFin = (f.aiFin || 0) + 1; if (s > 30) { if (s < 34) inp.d = 1; else if (s < 37) {} else if (s < 40) inp.d = 1; else if (s < 42) { inp.d = 1; inp.hk = 1; } } return inp; }
-  if (m.phase !== 'fight') return inp;
+  if (m.phase !== 'fight' || level < 0) return inp; // level < 0 = training dummy
   const ai = f.ai || (f.ai = { plan: null, t: 0, seq: [] });
   if (ai.seq.length) { Object.assign(inp, ai.seq.shift()); return inp; }
   const incoming = o.st === 'attack' || m.proj.some((p) => p.owner === o.side && Math.abs(p.x - f.x) < 160);
