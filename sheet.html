@@ -1,0 +1,6 @@
+<body style="background:#334;margin:0"><canvas id=c width=1400 height=1300></canvas><script type=module>
+import {ALL} from './src/roster.js'; import {sprite,POSES} from './src/sprites.js';
+const c=document.getElementById('c').getContext('2d');c.imageSmoothingEnabled=false;
+const poses=new URLSearchParams(location.search).get('all')?POSES:['idle','walk0','crouch','jump','jab','hkick','block','hit','down','win','special','rise'];
+ALL.forEach((ch,i)=>poses.forEach((p,j)=>{const s=sprite(ch,p,["base","alt","gold","neon"][j%4]);c.drawImage(s,j*110,i*118,s.width*1.7,s.height*1.7)}));
+</script>
