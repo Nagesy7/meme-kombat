@@ -67,9 +67,15 @@ export const DEMO = typeof location !== 'undefined' && new URLSearchParams(locat
 export let wallet = DEMO ? new SimWallet() : { simulated: false, address: null, live: false, async connect() { throw new Error('Wallet still loading, try again'); }, async balance() { return { units: 0n, ui: '0', soon: true }; }, async buy() { return { ok: false, error: SOON_MSG }; }, async burn() { return { ok: false, error: SOON_MSG }; }, async inventory() { return []; } };
 export let mode = DEMO ? 'demo' : 'loading';
 export let serverPools = null, serverBoard = null;
+export let walletUi = null;
 export async function initKibble(apiBase = 'https://kibble-pay.vercel.app') {
   const glue = glueMod = await import(apiBase + '/inu-games.js');
   const K = await glue.initKibble({ game: GAME, apiBase }); mode = K.mode; glue.mountFooter(K.mode);
+  // Connect Wallet (title + in-game): practice ladder rating saved to the wallet; holder alts read the real on-chain balance.
+  if (K.kp) walletUi = glue.mountWallet(K, { game: GAME, keys: ['mb.rank'], position: 'top-right',
+    progress: (g) => { try { const r = JSON.parse(g('mb.rank') || 'null'); return r ? (r.w || 0) * 10 + (r.l || 0) : 0; } catch { return 0; } },
+    label: (g) => { try { const r = JSON.parse(g('mb.rank') || 'null'); return r ? `Elo ${r.rating} · ${r.w}W ${r.l}L` : ''; } catch { return ''; } },
+    onWallet: (w) => { try { dispatchEvent(new CustomEvent('mb:wallet', { detail: w })); } catch {} } });
   if (K.kp) { wallet = new KibblePayAdapter(K.kp); refreshServer(K.kp).catch(() => {}); }
   return K;
 }

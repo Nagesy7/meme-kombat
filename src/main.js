@@ -408,6 +408,7 @@ function frame(now) { acc += Math.min(100, now - last); last = now; let n = 0; w
 document.fonts?.load(`16px ${FONT}`).finally(() => requestAnimationFrame(frame));
 if (!document.fonts) requestAnimationFrame(frame);
 const kp = new URLSearchParams(location.search).get('kibble'); if (QS.get('room')) { G.joinCode = QS.get('room').toUpperCase(); G.onKind = 'join'; G.onRanked = false; G.mode = 'online'; G.scr = 'select'; }
+addEventListener('mb:wallet', () => refreshOwned().catch(() => {}));
 if (!K.DEMO) K.initKibble(kp || undefined).catch((e) => console.warn('kibble-pay unavailable', e));
 // fit canvas
 function fit() { const vw = innerWidth, vh = innerHeight, s = Math.min(vw / W, vh / H); cv.style.width = Math.floor(W * s) + 'px'; cv.style.height = Math.floor(H * s) + 'px'; }
