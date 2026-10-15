@@ -1,0 +1,8 @@
+{"1366x768":{"frames":147,"sy":[0],"st":[0],"bt":[0],"vvy":[0],"ih":[768],"cy":[24],"cx":[43],"cwid":[1280],"w":[640],"h":[360],"canvasWidthSets":0,"shifts":0,"docH":768,"winH":768,"docW":1366,"dtMax":"19.2","audioCtx":1,"audioStarts":15,"maxLiveVoices":5,"startsPer100msMax":3,"camSamples":0,"bgDX":null,"playerScreenDX":null,"bgOffDevicePx":0,"stepHist":{"0":1,"1":146,"2":1},
+"errors":[]},
+"1440x900":{"frames":148,"sy":[0],"st":[0],"bt":[0],"vvy":[0],"ih":[900],"cy":[45],"cx":[0],"cwid":[1440],"w":[640],"h":[360],"canvasWidthSets":0,"shifts":0,"docH":900,"winH":900,"docW":1440,"dtMax":"19.2","audioCtx":1,"audioStarts":15,"maxLiveVoices":5,"startsPer100msMax":3,"camSamples":0,"bgDX":null,"playerScreenDX":null,"bgOffDevicePx":0,"stepHist":{"0":4,"1":141,"2":3},
+"errors":[]},
+"1280x720":{"frames":146,"sy":[0],"st":[0],"bt":[0],"vvy":[0],"ih":[720],"cy":[0],"cx":[0],"cwid":[1280],"w":[640],"h":[360],"canvasWidthSets":0,"shifts":0,"docH":720,"winH":720,"docW":1280,"dtMax":"19.3","audioCtx":1,"audioStarts":15,"maxLiveVoices":5,"startsPer100msMax":3,"camSamples":0,"bgDX":null,"playerScreenDX":null,"bgOffDevicePx":0,"stepHist":{"0":1,"1":144,"2":1},
+"errors":[]},
+"844x390":{"frames":158,"sy":[0],"st":[0],"bt":[0],"vvy":[0],"ih":[390],"cy":[15],"cx":[102],"cwid":[640],"w":[640],"h":[360],"canvasWidthSets":0,"shifts":0,"docH":390,"winH":390,"docW":844,"dtMax":"35.8","audioCtx":1,"audioStarts":18,"maxLiveVoices":5,"startsPer100msMax":3,"camSamples":0,"bgDX":null,"playerScreenDX":null,"bgOffDevicePx":0,"stepHist":{"0":1,"1":156,"2":2},
+"errors":[]}}

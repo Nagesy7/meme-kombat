@@ -385,7 +385,7 @@ function drawOnlineRes() {
   drawEnd(title, lines, won ? '#3ec46a' : why === 'desync' ? '#ffd25a' : '#ff5a5a');
 }
 function render() {
-  regions = []; ctx.save(); if (G.shake > 0) { ctx.translate((Math.random() - 0.5) * G.shake, (Math.random() - 0.5) * G.shake); G.shake *= 0.85; if (G.shake < 0.5) G.shake = 0; }
+  regions = []; ctx.save(); if (G.shake > 0) ctx.translate(Math.round((Math.random() - 0.5) * G.shake), Math.round((Math.random() - 0.5) * G.shake)); /* integer offsets (no subpixel blur); decays per sim step, not per rendered frame (was 2x longer/shorter at 30/120Hz) */
   switch (G.scr) {
     case 'title': drawTitle(); break; case 'menu': drawMenu(); break; case 'select': drawSelect(); break; case 'versus': drawVersus(); break; case 'ladder': drawLadder(); break; case 'shop': drawShop(); break; case 'help': drawHelp(); break; case 'online': drawOnline(); break; case 'lobby': drawLobby(); break; case 'onlineres': drawOnlineRes(); break;
     case 'gameover': drawEnd(G.mode === 'versus' ? `${G.match.f[G.match.matchWinner].ch.name.toUpperCase()} WINS` : 'GOT RUGGED', G.mode === 'versus' ? ['GG. Rematch from the menu.'] : ['The ladder humbled you.', 'Diamond paws. Try again.'], '#ff5a5a'); break;
@@ -404,14 +404,17 @@ function render() {
   ctx.restore();
 }
 let acc = 0, last = performance.now();
-function frame(now) { acc += Math.min(100, now - last); last = now; let n = 0; while (acc >= 1000 / 60 && n < 5) { update(); acc -= 1000 / 60; n++; } render(); requestAnimationFrame(frame); }
+// vsync snap: rAF timestamps wobble +-1-2ms; a raw 16.67ms accumulator ran 0 or 2 updates on many frames (stutter). Snap to whole 60Hz frames.
+export function snapMs(ms) { const k = Math.round(ms / (1000 / 60)); return k >= 1 && Math.abs(ms - k * 1000 / 60) < 2 ? k * 1000 / 60 : ms; }
+function frame(now) { acc += snapMs(Math.min(100, now - last)); last = now; let n = 0; while (acc >= 1000 / 60 - 1e-3 && n < 5) { update(); acc = Math.max(0, acc - 1000 / 60); n++; if (G.shake > 0) { G.shake *= 0.85; if (G.shake < 0.5) G.shake = 0; } }
+  (window.__stepHist ||= {})[n] = (window.__stepHist[n] || 0) + 1; /* jitter probe */ render(); requestAnimationFrame(frame); }
 document.fonts?.load(`16px ${FONT}`).finally(() => requestAnimationFrame(frame));
 if (!document.fonts) requestAnimationFrame(frame);
 const kp = new URLSearchParams(location.search).get('kibble'); if (QS.get('room')) { G.joinCode = QS.get('room').toUpperCase(); G.onKind = 'join'; G.onRanked = false; G.mode = 'online'; G.scr = 'select'; }
 addEventListener('mb:wallet', () => refreshOwned().catch(() => {}));
 if (!K.DEMO) K.initKibble(kp || undefined).catch((e) => console.warn('kibble-pay unavailable', e));
 // fit canvas
-function fit() { const vw = innerWidth, vh = innerHeight, s = Math.min(vw / W, vh / H); cv.style.width = Math.floor(W * s) + 'px'; cv.style.height = Math.floor(H * s) + 'px'; }
+function fit() { const vw = innerWidth, vh = innerHeight, d = devicePixelRatio || 1, s0 = Math.min(vw / W, vh / H), si = Math.floor(s0 * d) / d, s = si >= s0 * 0.9 ? si : s0; /* integer device-pixel scale when it costs <10% size: even pixels, no shimmer */ cv.style.width = Math.floor(W * s) + 'px'; cv.style.height = Math.floor(H * s) + 'px'; }
 addEventListener('resize', fit); fit();
 // 🏠 Back to Inu Verse hooks (kibble-pay mountHome): confirm mid-match, save first.
 globalThis.__inuHome = { busy: () => G.scr === 'fight' ? 'Leave this fight and go back to Inu Verse? The match is forfeited (rank kept).' : false };

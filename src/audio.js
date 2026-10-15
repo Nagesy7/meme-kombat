@@ -3,7 +3,7 @@ let ac = null, master = null, musicGain = null, seqTimer = null, muted = false, 
 export function unlock() {
   if (!ac) { const A = window.AudioContext || window.webkitAudioContext; if (!A) return; ac = new A(); master = ac.createGain(); master.gain.value = muted ? 0 : 0.5; master.connect(ac.destination); musicGain = ac.createGain(); musicGain.gain.value = 0.32; musicGain.connect(master);
     noiseBuf = ac.createBuffer(1, ac.sampleRate * 0.5, ac.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
-  if (ac.state === 'suspended') ac.resume();
+  if (ac.state === 'suspended' && !document.hidden) ac.resume();
 }
 export function setMuted(v) { muted = v; if (master) master.gain.value = v ? 0 : 0.5; }
 export const isMuted = () => muted;
@@ -16,8 +16,13 @@ function noise(t0, dur, vol = 0.3, hp = 800, dest = master) {
   g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur); s.connect(f); f.connect(g); g.connect(dest); s.start(t0); s.stop(t0 + dur + 0.02);
 }
 const N = (n) => 440 * Math.pow(2, (n - 69) / 12);
+// one-shot limiter: per-SFX cooldown + max concurrent voices
+const CD = { hit: 0.04, block: 0.05, whiff: 0.06, land: 0.08, select: 0.03, jump: 0.08 }, lastAt = {}; let ends = [];
+export const MAX_VOICES = 10;
+export function gate(name, now, cd = CD[name] ?? 0.05, dur = 0.3) { ends = ends.filter((t) => t > now); if (ends.length >= MAX_VOICES || now - (lastAt[name] ?? -1e9) < cd) return false; lastAt[name] = now; ends.push(now + dur); return true; }
+if (typeof document !== 'undefined') { document.addEventListener('visibilitychange', () => { if (!ac) return; if (document.hidden) ac.suspend?.(); else ac.resume?.(); }); addEventListener('pagehide', () => ac?.suspend?.()); }
 export function sfx(type, o = {}) {
-  if (!ac) return; const t = ac.currentTime;
+  if (!ac || !gate(type, ac.currentTime)) return; const t = ac.currentTime;
   switch (type) {
     case 'hit': noise(t, o.heavy ? 0.18 : 0.09, o.heavy ? 0.45 : 0.3, o.heavy ? 300 : 900); tone(o.heavy ? 140 : 220, t, 0.12, 'square', 0.18, master, 0.4); break;
     case 'block': tone(1200, t, 0.05, 'square', 0.1); tone(900, t + 0.03, 0.05, 'square', 0.08); break;
@@ -47,9 +52,11 @@ const SONGS = {
 };
 let current = null;
 export function music(name) {
-  if (current === name) return; current = name; if (seqTimer) clearInterval(seqTimer); seqTimer = null; if (!ac || !name) return;
+  if (current === name) return; current = name; if (seqTimer) clearInterval(seqTimer); seqTimer = null; if (!ac) return;
+  { const old = musicGain; old.gain.setTargetAtTime(0, ac.currentTime, 0.03); setTimeout(() => old.disconnect(), 400); musicGain = ac.createGain(); musicGain.gain.value = 0.32; musicGain.connect(master); } // one track at a time: queued notes of the old song fade out
+  if (!name) return;
   const S = SONGS[name] || SONGS.menu, spb = 60 / S.bpm / 2; let step = 0, next = ac.currentTime + 0.05;
-  seqTimer = setInterval(() => { while (next < ac.currentTime + 0.15) { const b = S.bass[Math.floor(step / 2) % S.bass.length], l = S.lead[step % S.lead.length], d = S.drum[step % S.drum.length];
+  seqTimer = setInterval(() => { if (next < ac.currentTime - 0.05) next = ac.currentTime + 0.05; /* throttled timer: skip, don't burst */ while (next < ac.currentTime + 0.15) { const b = S.bass[Math.floor(step / 2) % S.bass.length], l = S.lead[step % S.lead.length], d = S.drum[step % S.drum.length];
       if (step % 2 === 0) tone(N(S.key - 12 + b), next, spb * 1.8, 'triangle', 0.35, musicGain);
       if (l) tone(N(S.key + l), next, spb * 0.9, 'square', 0.09, musicGain);
       if (d === 'k') tone(120, next, 0.1, 'sine', 0.5, musicGain, 0.3); else if (d === 's') noise(next, 0.08, 0.18, 1200, musicGain); else if (d === 'h') noise(next, 0.03, 0.06, 6000, musicGain);
