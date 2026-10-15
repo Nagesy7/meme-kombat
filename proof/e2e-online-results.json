@@ -1,12 +1,12 @@
 {
- "at": "2026-10-15T05:56:47.914Z",
- "url": "http://localhost:45863/",
+ "at": "2026-10-15T06:13:50.245Z",
+ "url": "http://localhost:38715/",
  "kibble": "http://localhost:8799",
  "results": [
   {
    "name": "desktop: private room created with a share code",
    "pass": true,
-   "extra": "NUL5VL"
+   "extra": "5R2CTQ"
   },
   {
    "name": "desktop: two browser contexts matched and connected",
@@ -21,7 +21,7 @@
   {
    "name": "desktop private room (WebRTC): no desync, identical result reports (winner, rounds, hp, ticks, checksum)",
    "pass": true,
-   "extra": "{\"winner\":0,\"wins\":[2,0],\"hp\":1000,\"ticks\":2503,\"checksum\":\"b0a341af\"}"
+   "extra": "{\"winner\":0,\"wins\":[2,0],\"hp\":1000,\"ticks\":2552,\"checksum\":\"6a6b51d4\"}"
   },
   {
    "name": "desktop private room (WebRTC): server verified the result (both clients agree)",
@@ -41,12 +41,12 @@
   {
    "name": "desktop ranked quick match: both clients finished the online match",
    "pass": true,
-   "extra": "done/done via relay/p2p delay 4"
+   "extra": "done/done via p2p/p2p delay 4"
   },
   {
    "name": "desktop ranked quick match: no desync, identical result reports (winner, rounds, hp, ticks, checksum)",
    "pass": true,
-   "extra": "{\"winner\":0,\"wins\":[2,0],\"hp\":1000,\"ticks\":2467,\"checksum\":\"ba2c1aa5\"}"
+   "extra": "{\"winner\":0,\"wins\":[2,0],\"hp\":1000,\"ticks\":2603,\"checksum\":\"758280bd\"}"
   },
   {
    "name": "desktop ranked quick match: server verified the result (both clients agree)",
@@ -56,7 +56,7 @@
   {
    "name": "ranked: verified PvP win posted to /api/game prize board for the winner wallet",
    "pass": true,
-   "extra": "[{\"rank\":1,\"wallet\":\"YiMx5UH9CTW2Sdhq4Kf1icyHEj264qJo47KLBBnKbt6\",\"score\":2500}]"
+   "extra": "[{\"rank\":1,\"wallet\":\"5cxozVPzoDc171CCqEvRu1AAoX5xkyYj5TTdS3noxtCg\",\"score\":2500}]"
   },
   {
    "name": "ranked: client-submitted (e.g. vs CPU) meme-brawl scores are refused",
@@ -66,12 +66,12 @@
   {
    "name": "iPhone landscape (relay fallback): both clients finished the online match",
    "pass": true,
-   "extra": "done/done via relay/relay delay 10"
+   "extra": "done/done via relay/relay delay 9"
   },
   {
    "name": "iPhone landscape (relay fallback): no desync, identical result reports (winner, rounds, hp, ticks, checksum)",
    "pass": true,
-   "extra": "{\"winner\":0,\"wins\":[2,0],\"hp\":1000,\"ticks\":2887,\"checksum\":\"fe9bdb42\"}"
+   "extra": "{\"winner\":0,\"wins\":[2,0],\"hp\":1000,\"ticks\":2961,\"checksum\":\"40244d17\"}"
   },
   {
    "name": "iPhone landscape (relay fallback): server verified the result (both clients agree)",
@@ -86,7 +86,7 @@
   {
    "name": "disconnect: opponent leaving ends the match as a forfeit",
    "pass": true,
-   "extra": "forfeit after 10107ms"
+   "extra": "forfeit after 10061ms"
   }
  ]
 }

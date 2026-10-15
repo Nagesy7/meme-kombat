@@ -47,3 +47,8 @@ test('same seed + same inputs => identical state; different input => different h
   const run = (extra) => { const m = makeMatch('wiffy', 'toot', { seed: 5 }); for (let i = 0; i < 320; i++) step(m, [i >= 100 && i < 140 && extra ? { l: 1, u: 1 } : { r: 1, lp: i % 7 === 0 }, { l: 1, lk: i % 11 === 0 }]); return stateHash(m); };
   assert.equal(run(false), run(false)); assert.notEqual(run(false), run(true));
 });
+
+test('online client module parses and exposes the session API', async () => {
+  const { OnlineSession, DISCONNECT_MS } = await import('../src/online.js');
+  assert.equal(typeof OnlineSession, 'function'); assert.ok(DISCONNECT_MS >= 5000);
+});

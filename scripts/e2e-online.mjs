@@ -9,7 +9,8 @@ const nacl = kreq('tweetnacl'), bs58m = kreq('bs58'), bs58 = bs58m.default || bs
 const root = path.resolve('.'), types = { '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.ttf': 'font/ttf' };
 const srv = http.createServer((q, r) => { let p = path.join(root, decodeURIComponent(q.url.split('?')[0])); if (p.endsWith('/')) p += 'index.html'; fs.readFile(p, (e, d) => { if (e) { r.writeHead(404); r.end(); } else { r.writeHead(200, { 'content-type': types[path.extname(p)] || 'application/octet-stream' }); r.end(d); } }); }).listen(0);
 let KIBBLE = process.env.KIBBLE, dev = null;
-if (!KIBBLE) { dev = spawn('node', ['scripts/dev-server.mjs', '8799'], { cwd: KP, env: { ...process.env, KIBBLE_NETWORK: 'devnet' }, stdio: 'ignore' }); KIBBLE = 'http://localhost:8799'; await new Promise((r) => setTimeout(r, 1500)); }
+if (!KIBBLE) { dev = spawn('node', ['scripts/dev-server.mjs', '8799'], { cwd: KP, env: { ...process.env, KIBBLE_NETWORK: 'devnet' }, stdio: 'ignore' }); KIBBLE = 'http://localhost:8799';
+  for (let i = 0; i < 60; i++) { try { if ((await fetch(KIBBLE + '/api/pvp?action=room&code=X')).status) break; } catch {} await new Promise((r) => setTimeout(r, 250)); } }
 const URL = process.env.URL || `http://localhost:${srv.address().port}/`;
 const PFX = process.env.PFX || 'online';
 const results = []; const ok = (name, cond, extra = '') => { results.push({ name, pass: !!cond, extra }); console.log((cond ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : '')); };

@@ -1,0 +1,27 @@
+{
+ "at": "2026-10-15T06:10:00.930Z",
+ "url": "https://meme-brawl.vercel.app/",
+ "kibble": "https://kibble-pay.vercel.app",
+ "results": [
+  {
+   "name": "iPhone landscape (relay fallback): both clients finished the online match",
+   "pass": true,
+   "extra": "done/done via relay/relay delay 36"
+  },
+  {
+   "name": "iPhone landscape (relay fallback): no desync, identical result reports (winner, rounds, hp, ticks, checksum)",
+   "pass": true,
+   "extra": "{\"winner\":0,\"wins\":[2,0],\"hp\":1000,\"ticks\":2429,\"checksum\":\"bbcb4e2e\"}"
+  },
+  {
+   "name": "iPhone landscape (relay fallback): server verified the result (both clients agree)",
+   "pass": true,
+   "extra": "Verified by both players. Casual match: no prizes. | Verified by both players. casual match (not ranked)"
+  },
+  {
+   "name": "iPhone: server relay fallback used when WebRTC is unavailable",
+   "pass": true,
+   "extra": "relay"
+  }
+ ]
+}

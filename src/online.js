@@ -44,20 +44,19 @@ export class OnlineSession {
   }
   // ---- transport ----
   onMessage(f) { this.handlers.push(f); }
-  emit(m) { this.lastSeen = performance.now(); if (m.t === 'bye') this.peerGone = true; if (m.t === 'go') this.gotGo = m; else if (m.t === 'in' || m.t === 'ck') this.inbox.push(m); for (const f of this.handlers) f(m); }
+  emit(m) { this.lastSeen = performance.now(); if (m.t === 'ping') return this.send({ t: 'pong', ts: m.ts }); if (m.t === 'pong') { this.rtt = performance.now() - m.ts; return; } if (m.t === 'bye') this.peerGone = true; if (m.t === 'go') this.gotGo = m; else if (m.t === 'in' || m.t === 'ck') this.inbox.push(m); for (const f of this.handlers) f(m); }
   drain() { const a = this.inbox; this.inbox = []; return a; }
   send(m) { if (this.dc && this.dc.readyState === 'open') { try { this.dc.send(JSON.stringify(m)); return; } catch {} } this.out.push(m); }
   async flush() { if (!this.out.length || this.closed) return; const msgs = this.out.splice(0, 64); try { await this.req('signal', { code: this.code, side: this.side, tok: this.tok, msgs }); } catch { this.out.unshift(...msgs); } }
-  async pollLoop() {
+  async pollLoop() { // receive loop; sending runs separately so a slow poll never delays our inputs
+    this.sendLoop();
     while (!this.closed) {
-      try {
-        await this.flush();
-        const r = await this.req('signal', { code: this.code, side: this.side, tok: this.tok, after: this.after }, 'GET');
-        if (r.ok) { this.after = r.next; for (const m of r.msgs) this.onSignal(m); }
-      } catch {}
-      await sleep(this.via === 'p2p' ? 1000 : this.via === 'relay' ? 60 : 150);
+      try { const r = await this.req('signal', { code: this.code, side: this.side, tok: this.tok, after: this.after }, 'GET');
+        if (r.ok) { this.after = r.next; for (const m of r.msgs) this.onSignal(m); } } catch {}
+      await sleep(this.via === 'p2p' && this.dc?.readyState === 'open' ? 1000 : this.via === 'relay' ? 25 : 150);
     }
   }
+  async sendLoop() { while (!this.closed) { if (this.out.length) await this.flush(); else await sleep(this.via === 'relay' ? 16 : 50); } }
   onSignal(m) { if (m.t === 'offer' || m.t === 'answer') this.onSdp(m); else this.emit(m); }
   async connect() {
     const deadline = sleep(P2P_TIMEOUT_MS).then(() => 'timeout');
@@ -65,13 +64,15 @@ export class OnlineSession {
     if (typeof RTCPeerConnection !== 'undefined' && !new URLSearchParams(location.search).has('relay')) {
       try {
         const pc = this.pc = new RTCPeerConnection({ iceServers: ICE });
-        opened = new Promise((res) => { const hook = (dc) => { this.dc = dc; dc.onopen = () => res('open'); dc.onmessage = (e) => { try { this.emit(JSON.parse(e.data)); } catch {} }; dc.onclose = () => { if (!this.closed) this.via = 'relay'; }; };
+        opened = new Promise((res) => { const hook = (dc) => { this.dc = dc; dc.onopen = () => res('open'); dc.onmessage = (e) => { try { this.emit(JSON.parse(e.data)); } catch {} }; dc.onclose = () => { this.dcLost = true; }; /* send() falls back to the relay */ };
           if (this.side === 0) hook(pc.createDataChannel('mb', { ordered: true })); else pc.ondatachannel = (e) => hook(e.channel); });
         if (this.side === 0) { await pc.setLocalDescription(await pc.createOffer()); await iceDone(pc); this.out.push({ t: 'offer', sdp: pc.localDescription.sdp }); ok = (await Promise.race([opened, deadline])) === 'open'; }
       } catch (e) { console.warn('webrtc failed', e); }
     } else await sleep(300);
-    // the host decides the transport + input delay (p2p: 4 ticks ~67ms, relay: 10 ticks) and tells the guest
-    if (this.side === 0) { this.via = ok ? 'p2p' : 'relay'; this.delay = this.via === 'p2p' ? 4 : 10; this.send({ t: 'go', delay: this.delay, via: this.via }); }
+    // the host decides the transport + input delay (p2p: 4 ticks ~67ms; relay: measured from ping RTT, 6..36 ticks) and tells the guest
+    if (this.side === 0) { this.via = ok ? 'p2p' : 'relay'; this.delay = 4;
+      if (this.via === 'relay') { const rtts = []; for (let i = 0; i < 3; i++) { this.rtt = null; this.send({ t: 'ping', ts: performance.now() }); for (let w = 0; w < 60 && this.rtt == null; w++) await sleep(50); if (this.rtt != null) rtts.push(this.rtt); }
+        const rtt = rtts.length ? rtts.sort((a, b) => a - b)[Math.floor(rtts.length / 2)] : 500; this.rttMs = Math.round(rtt); this.delay = Math.max(6, Math.min(36, Math.ceil(rtt / 16.7 / 2) + 4)); } this.send({ t: 'go', delay: this.delay, via: this.via }); }
     else { const go = await new Promise((res) => { if (this.gotGo) return res(this.gotGo); this.handlers.push((m) => { if (m.t === 'go') res(m); }); });
       if (go.via === 'p2p' && opened) await Promise.race([opened, sleep(2000)]);
       this.delay = go.delay; this.via = go.via; }
