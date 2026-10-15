@@ -1,4 +1,4 @@
-// $KIBBLE hooks: real kibble-pay adapter by default (purchases show 'launching soon' until the mint is set);
+// $KIBBLE hooks: real kibble-pay adapter by default ($KIBBLE is live);
 // SimWallet + local ledger ONLY with ?demo=1. Elo ladder vs AI rivals is local; ranked wins post a wallet-signed score.
 export const TREASURY = 'BzLYTFAfUsjzQ5x8bx5BbPK4DFtaHrLCuferkvkxTNGJ';
 export const DECIMALS = 6;
@@ -49,7 +49,7 @@ export class SimWallet { // same surface as kibblePay: connect / balance / buy /
   async inventory() { return load('inv', []); }
 }
 export const GAME = 'meme-brawl';
-export const SOON_MSG = 'KIBBLE launching soon: purchases open at launch.';
+export const SOON_MSG = 'KIBBLE is live, but the wallet service is unreachable right now. Try again shortly.';
 export class KibblePayAdapter { // wraps the shared SDK (https://kibble-pay.vercel.app/kibble-pay.js). Catalog ids: meme-brawl:<id>, fee-inclusive.
   constructor(sdk) { this.k = sdk; this.simulated = false; }
   get live() { return !!this.k.cfg?.provisioned; }

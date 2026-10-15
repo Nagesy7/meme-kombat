@@ -16,7 +16,7 @@ An original browser 2D versus fighter in vanilla JS canvas, set in the Inu Verse
 - **No wagering of any kind.** There is no betting, no stakes, no entry fees and no spectator betting. Prize pools are funded from shop revenue and paid by rank (see Prize Rules).
 
 ## $KIBBLE
-The game uses the real kibble-pay SDK by default (loaded from https://kibble-pay.vercel.app via `inu-games.js`). Until the $KIBBLE mint is set, the shop shows "KIBBLE launching soon" and nothing is charged. Catalog ids are `meme-brawl:gold` (250) and `meme-brawl:neon` (150). **Demo mode (fake balance) only runs with `?demo=1`**, clearly labelled. The footer links Terms and Prize Rules.
+The game uses the real kibble-pay SDK by default (loaded from https://kibble-pay.vercel.app via `inu-games.js`). $KIBBLE is live (CA `4VE9sy4fEMJdZ6i7MkYPbnqDJd2oqzJQmg44WJ3opump`): shop purchases are real and signed in Phantom. Catalog ids are `meme-brawl:gold` (2,500,000) and `meme-brawl:neon` (1,500,000). **Demo mode (fake balance) only runs with `?demo=1`**, clearly labelled. The footer links Terms and Prize Rules.
 
 ## Tests
 - `npm test`: combat logic, netcode determinism (two simulated peers over a laggy, jittery link), and the rename audit (fails on any banned franchise term or real-token brand string).
