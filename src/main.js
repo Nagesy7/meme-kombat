@@ -413,3 +413,5 @@ if (!K.DEMO) K.initKibble(kp || undefined).catch((e) => console.warn('kibble-pay
 // fit canvas
 function fit() { const vw = innerWidth, vh = innerHeight, s = Math.min(vw / W, vh / H); cv.style.width = Math.floor(W * s) + 'px'; cv.style.height = Math.floor(H * s) + 'px'; }
 addEventListener('resize', fit); fit();
+// 🏠 Back to Inu Verse hooks (kibble-pay mountHome): confirm mid-match, save first.
+globalThis.__inuHome = { busy: () => G.scr === 'fight' ? 'Leave this fight and go back to Inu Verse? The match is forfeited (rank kept).' : false };

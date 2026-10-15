@@ -72,6 +72,7 @@ export async function initKibble(apiBase = 'https://kibble-pay.vercel.app') {
   const glue = glueMod = await import(apiBase + '/inu-games.js');
   const K = await glue.initKibble({ game: GAME, apiBase }); mode = K.mode; glue.mountFooter(K.mode);
   // Connect Wallet (title + in-game): practice ladder rating saved to the wallet; holder alts read the real on-chain balance.
+  glue.mountHome?.(); // 🏠 Back to Inu Verse (title/pause/results; confirms + saves via globalThis.__inuHome)
   if (K.kp) walletUi = glue.mountWallet(K, { game: GAME, keys: ['mb.rank'], position: 'top-right',
     progress: (g) => { try { const r = JSON.parse(g('mb.rank') || 'null'); return r ? (r.w || 0) * 10 + (r.l || 0) : 0; } catch { return 0; } },
     label: (g) => { try { const r = JSON.parse(g('mb.rank') || 'null'); return r ? `Elo ${r.rating} · ${r.w}W ${r.l}L` : ''; } catch { return ''; } },
