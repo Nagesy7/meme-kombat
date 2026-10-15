@@ -53,7 +53,7 @@ function ddMotion(buf, now) { // down, not-down, down
 
 const neutral = (f) => f.st === 'idle' || f.st === 'walk' || f.st === 'crouch' || f.st === 'block' || f.st === 'cblock';
 
-function startMove(m, f, mv, name) { if (mv.special) f.specialsUsed = (f.specialsUsed || 0) + 1; f.st = 'attack'; f.t = 0; f.move = { ...mv, name }; f.hitDone = false; m.events.push({ type: 'whiff', who: f.side, mv: name }); }
+function startMove(m, f, mv, name) { consume(f); if (mv.special) f.specialsUsed = (f.specialsUsed || 0) + 1; f.st = 'attack'; f.t = 0; f.move = { ...mv, name }; f.hitDone = false; m.events.push({ type: 'whiff', who: f.side, mv: name }); }
 
 function specialMove(f, kind) {
   const S = f.ch.specials, pw = f.ch.pow || 1;
@@ -63,17 +63,21 @@ function specialMove(f, kind) {
   if (kind === 'super') return { s: 10, a: 22, r: 26, dmg: Math.round(S.super.dmg * pw), hs: 40, bs: 24, kb: 10, x: [-10, 120], y: [0, 140], lvl: 'mid', pose: 'super', dash: 6, special: S.super.name, chip: true, launch: 12, super: true, invS: 12 };
 }
 
+// Button presses are buffered for BUFFER ticks (also through hitstop) so a tap during
+// recovery/hitstop still comes out on the first actionable frame. Consumed when a move starts.
+export const BUFFER = 8;
+function latch(m, f, inp) { f.pq = f.pq || {}; for (const k of ['lp', 'hp', 'lk', 'hk']) if (inp[k] && !f.prev[k]) f.pq[k] = m.tick; f.prev = { ...inp }; }
+const consume = (f) => { f.pq = {}; };
 // Read input and start actions. inp: {u,d,l,r,lp,hp,lk,hk} held booleans.
 function control(m, f, o, inp) {
-  const pr = {}; for (const k of ['lp', 'hp', 'lk', 'hk']) pr[k] = inp[k] && !f.prev[k];
-  f.prev = { ...inp };
+  latch(m, f, inp); const pr = {}; for (const k of ['lp', 'hp', 'lk', 'hk']) pr[k] = f.pq[k] != null && m.tick - f.pq[k] <= BUFFER;
   // face the opponent when grounded and neutral
   if (f.y === 0 && neutral(f)) f.face = o.x >= f.x ? 1 : -1;
   const d = relDir(inp, f.face);
   if (d !== f.lastDir) { f.buf.push({ d, t: m.tick }); if (f.buf.length > 24) f.buf.shift(); f.lastDir = d; }
   f.holdBack = d === 4 || d === 1 || d === 7; f.crouchHeld = d === 1 || d === 2 || d === 3;
   const anyP = pr.lp || pr.hp, anyK = pr.lk || pr.hk;
-  if (f.st === 'jump' && !f.move && (anyP || anyK)) { f.move = { ...(anyK ? NORMALS.jk : NORMALS.jp), name: anyK ? 'jk' : 'jp' }; f.mt = 0; f.hitDone = false; m.events.push({ type: 'whiff', who: f.side }); return; }
+  if (f.st === 'jump' && !f.move && (anyP || anyK)) { consume(f); f.move = { ...(anyK ? NORMALS.jk : NORMALS.jp), name: anyK ? 'jk' : 'jp' }; f.mt = 0; f.hitDone = false; m.events.push({ type: 'whiff', who: f.side }); return; }
   if (!neutral(f)) return;
   if (f.y > 0) return;
   // specials (priority: super > rise > rush > proj)
@@ -83,7 +87,7 @@ function control(m, f, o, inp) {
   if (anyP && motion(f.buf, [2, 3, 6], 20, m.tick) && !m.proj.some((p) => p.owner === f.side)) return startMove(m, f, specialMove(f, 'proj'), 'proj');
   // throw: forward + HP close
   if (pr.hp && (d === 6) && Math.abs(o.x - f.x) < THROW.range && o.y === 0 && neutral(o) && o.st !== 'down' && o.inv <= 0) {
-    f.st = 'throw'; f.t = 0; o.st = 'thrown'; o.t = 0; o.vx = 0; m.events.push({ type: 'throw', who: f.side }); return;
+    consume(f); f.st = 'throw'; f.t = 0; o.st = 'thrown'; o.t = 0; o.vx = 0; m.events.push({ type: 'throw', who: f.side }); return;
   }
   const c = f.crouchHeld;
   for (const k of ['hp', 'hk', 'lp', 'lk']) if (pr[k]) return startMove(m, f, NORMALS[c ? 'c' + k : k], c ? 'c' + k : k);
@@ -184,7 +188,7 @@ function stepProj(m) {
 }
 
 export function resetRound(m) {
-  m.f.forEach((f, i) => { Object.assign(f, { x: i === 0 ? 200 : 440, y: 0, vx: 0, vy: 0, face: i === 0 ? 1 : -1, hp: f.maxHp, st: 'idle', t: 0, move: null, combo: 0, juggle: 0, inv: 0, buf: [], prev: {} }); });
+  m.f.forEach((f, i) => { Object.assign(f, { x: i === 0 ? 200 : 440, y: 0, vx: 0, vy: 0, face: i === 0 ? 1 : -1, hp: f.maxHp, st: 'idle', t: 0, move: null, combo: 0, juggle: 0, inv: 0, buf: [], prev: {}, pq: {} }); });
   m.proj = []; m.timer = ROUND_FRAMES; m.phase = 'intro'; m.pt = 0; m.winner = null; m.finisher = null;
   say(m, m.round >= 3 && m.wins[0] === 1 && m.wins[1] === 1 ? 'FINAL ROUND' : `ROUND ${m.round}`, 70);
 }
@@ -193,7 +197,7 @@ export function resetRound(m) {
 export function step(m, inputs) {
   m.tick++; m.pt++;
   if (m.banner && --m.banner.t <= 0) m.banner = null;
-  if (m.hitstop > 0) { m.hitstop--; return; }
+  if (m.hitstop > 0) { m.hitstop--; if (m.phase === 'fight') m.f.forEach((f, i) => latch(m, f, inputs[i] || {})); return; }
   const [a, b] = m.f;
   if (m.phase === 'intro') { if (m.pt === 70) say(m, 'FIGHT!', 40); if (m.pt >= 80) { m.phase = 'fight'; m.pt = 0; } return; }
   if (m.phase === 'fight') {
@@ -248,7 +252,9 @@ export function cpuInput(m, idx, level = 0.5) {
   const ai = f.ai || (f.ai = { plan: null, t: 0, seq: [] });
   if (ai.seq.length) { Object.assign(inp, ai.seq.shift()); return inp; }
   const incoming = o.st === 'attack' || m.proj.some((p) => p.owner === o.side && Math.abs(p.x - f.x) < 160);
-  if (incoming && r() < level * 0.9) { inp[back] = 1; if (o.move && (o.move.lvl === 'low')) inp.d = 1; return inp; }
+  // decide once per incoming action (not a fresh roll every frame) and only after a reaction delay
+  if (!incoming) ai.react = null; else if (!ai.react) ai.react = { at: m.tick + Math.round(10 - level * 7), block: r() < level * 0.9 };
+  if (incoming && ai.react.block && m.tick >= ai.react.at) { inp[back] = 1; if (o.move && (o.move.lvl === 'low')) inp.d = 1; return inp; }
   if (o.st === 'jump' && dist < 110 && r() < level * 0.5) { ai.seq = [{ d: 1 }, {}, { d: 1 }, { d: 1, hp: 1 }]; return inp; }
   if (o.st === 'air' && dist < 90 && f.st === 'idle' && r() < level) { ai.seq = [{ hk: 1 }]; return inp; }
   if (++ai.t < 4 + (1 - level) * 10) { if (ai.plan) inp[ai.plan] = 1; return inp; }

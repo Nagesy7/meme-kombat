@@ -159,6 +159,7 @@ function spawnFx(ev) {
     if (ev.type === 'hit') { G.fx.push({ ring: 1, x: ev.x, y: GY - ev.y, life: 10, r: 6 }); G.shake = ev.heavy ? 8 : 3; } }
   if (ev.type === 'land' && ev.heavy) { for (let i = 0; i < 10; i++) G.fx.push({ x: G.match.f[ev.who].x + (Math.random() - 0.5) * 50, y: GY, vx: (Math.random() - 0.5) * 3, vy: -Math.random() * 2, life: 20, col: '#c8b89a', s: 4 }); G.shake = 5; }
   if (ev.type === 'ko') G.shake = 14;
+  if (TOUCH() && navigator.vibrate && (ev.type === 'hit' || ev.type === 'block' || ev.type === 'ko')) try { navigator.vibrate(ev.type === 'ko' ? 60 : ev.type === 'block' ? 8 : ev.heavy ? 22 : 12); } catch {} // haptic hit feedback on phones
   sfx(ev.type === 'banner' ? 'banner' : ev.type, ev);
 }
 function drawFx() { for (const p of G.fx) { if (p.ring) { ctx.strokeStyle = '#fff6c0'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, p.r += 3, 0, 7); ctx.stroke(); } else { p.x += p.vx; p.y += p.vy; p.vy += 0.2; ctx.fillStyle = p.col; ctx.fillRect(Math.round(p.x), Math.round(p.y), p.s, p.s); } p.life--; } G.fx = G.fx.filter((p) => p.life > 0); }
