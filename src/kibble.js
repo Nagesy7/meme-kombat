@@ -63,7 +63,7 @@ export class KibblePayAdapter { // wraps the shared SDK (https://kibble-pay.verc
   async submitScore(score, durationMs) { return this.k.submitScore(GAME, score, durationMs); }
 }
 export const DEMO = typeof location !== 'undefined' && new URLSearchParams(location.search).get('demo') === '1';
-// Demo (fake balance) ONLY with ?demo=1. Otherwise the real kibblePay adapter; before the mint is set, buys show SOON_MSG.
+// Demo (fake balance) ONLY with ?demo=1. Otherwise the real kibblePay adapter; if kibble-pay is unreachable, buys show SOON_MSG.
 export let wallet = DEMO ? new SimWallet() : { simulated: false, address: null, live: false, async connect() { throw new Error('Wallet still loading, try again'); }, async balance() { return { units: 0n, ui: '0', soon: true }; }, async buy() { return { ok: false, error: SOON_MSG }; }, async burn() { return { ok: false, error: SOON_MSG }; }, async inventory() { return []; } };
 export let mode = DEMO ? 'demo' : 'loading';
 export let serverPools = null, serverBoard = null;
