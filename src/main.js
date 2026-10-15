@@ -275,13 +275,13 @@ function drawHelp() {
 async function shopAct(i) {
   if (i < K.SHOP.length) { const it = K.SHOP[i]; if (K.mode !== 'live' && K.mode !== 'demo') { G.msg = K.SOON_MSG; return; } if (!K.wallet.address) { G.msg = 'Connect a wallet first'; return; } const r = await K.wallet.buy({ itemId: it.id }); G.msg = r.ok ? `Bought ${it.name}! sig ${String(r.signature).slice(0, 14)}` : `${r.error === K.SOON_MSG ? '' : 'Failed: '}${r.error}`; if (r.ok) sfx('coin'); }
   else if (i === K.SHOP.length) { if (K.wallet.address) await K.wallet.disconnect(); else { try { await K.wallet.connect(); } catch (e) { G.msg = 'Wallet: ' + e.message; refreshOwned(); return; } } if (K.wallet.address && !K.wallet.simulated) K.loadShiba().catch(() => {}); G.msg = K.wallet.address ? (K.wallet.simulated ? 'DEMO wallet connected (fake 2,500 KIBBLE)' : 'Wallet signed in. Ranked wins now post to the prize board.') : 'Disconnected'; }
-  else { const r = await K.wallet.burn(10, 'respect'); G.msg = r.ok ? 'Burned 10 KIBBLE (destroyed, optional). Respect.' : `${r.error}`; }
+  else { const r = await K.wallet.burn(100000, 'respect'); G.msg = r.ok ? 'Burned 100,000 KIBBLE (destroyed, optional). Respect.' : `${r.error}`; }
   refreshOwned();
 }
 function drawShop() {
   ctx.drawImage(stageCanvas('mall'), 0, 0); ctx.fillStyle = 'rgba(6,4,20,.78)'; ctx.fillRect(0, 0, W, H); text('SKIN SHOP', 320, 20, 16, '#ffd25a');
   text(K.mode === 'demo' ? 'DEMO MODE (?demo=1): fake KIBBLE, nothing real' : K.mode === 'live' ? 'LIVE $KIBBLE via Phantom' : K.SOON_MSG, 320, 40, 7, '#ff5aa8');
-  const items = [...K.SHOP.map((s) => [`${s.name}  ${s.price} KIBBLE${G.owned.includes(s.id) ? '  (OWNED)' : ''}`, s]), [K.wallet.address ? `DISCONNECT ${K.wallet.address.slice(0, 4)}..${K.wallet.address.slice(-4)}` : 'CONNECT WALLET'], ['OPTIONAL: BURN 10 KIBBLE (destroys it)']];
+  const items = [...K.SHOP.map((s) => [`${s.name}  ${s.price} KIBBLE${G.owned.includes(s.id) ? '  (OWNED)' : ''}`, s]), [K.wallet.address ? `DISCONNECT ${K.wallet.address.slice(0, 4)}..${K.wallet.address.slice(-4)}` : 'CONNECT WALLET'], ['OPTIONAL: BURN 100,000 KIBBLE (destroys it)']];
   items.forEach(([n], i) => { const y = 70 + i * 34, on = G.shopI === i; panel(30, y - 13, 290, 26, on ? '#3a2060' : '#121a36', on ? '#ffd25a' : '#4a4f8c'); text(n, 40, y, 7, '#fff6e0', 'left'); btn(30, y - 13, 290, 26, () => { G.shopI = i; shopAct(i); }); });
   const it = K.SHOP[Math.min(G.shopI, K.SHOP.length - 1)], f = K.computeFees(K.toBase(it.price));
   panel(340, 58, 270, 150, '#121a36'); text(`${it.price} KIBBLE, 2% fee included:`, 350, 72, 7, '#ffd25a', 'left');

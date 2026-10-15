@@ -21,8 +21,8 @@ export const PRIZE_SHARES = [0.40, 0.25, 0.15, 0.05, 0.05, 0.04, 0.03, 0.01, 0.0
 export function prizeFor(rank, pool) { return rank >= 1 && rank <= PRIZE_SHARES.length ? Math.floor(pool * PRIZE_SHARES[rank - 1]) : 0; }
 
 export const SHOP = [
-  { id: 'gold', name: 'Gold Bag skin', price: 250, desc: 'Gold suit for any fighter' },
-  { id: 'neon', name: 'Neon Degen skin', price: 150, desc: 'Hot-pink + cyan fit' },
+  { id: 'gold', name: 'Gold Bag skin', price: 2500000, desc: 'Gold suit for any fighter' },
+  { id: 'neon', name: 'Neon Degen skin', price: 1500000, desc: 'Hot-pink + cyan fit' },
 ];
 const RIVALS = ['DiamondPaws', 'RugSniffer', 'ApeLord', 'MoonBoi', 'WenLambo', 'GasGuzzler', 'HODLmom', 'SatoshiPup', 'ExitLiq', 'BagHolder', 'PumpPrincess', 'CandleChad', 'FloorSweeper', 'NGMIbro', 'DegenDave'];
 export function rivals() { return RIVALS.map((n, i) => ({ name: n, rating: 1720 - i * 42, char: i })); }
@@ -34,7 +34,7 @@ const save = (k, v) => LS.setItem('mb.' + k, JSON.stringify(v));
 
 export class SimWallet { // same surface as kibblePay: connect / balance / buy / burn / inventory
   constructor() { this.simulated = true; this.address = load('addr', null); }
-  async connect() { if (!this.address) { const A = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'; this.address = 'SiM' + Array.from({ length: 41 }, () => A[Math.floor(Math.random() * 58)]).join(''); save('addr', this.address); save('bal', '2500000000'); } return this.address; }
+  async connect() { if (!this.address) { const A = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'; this.address = 'SiM' + Array.from({ length: 41 }, () => A[Math.floor(Math.random() * 58)]).join(''); save('addr', this.address); save('bal', '25000000000000'); } return this.address; }
   async disconnect() { this.address = null; save('addr', null); }
   async balance() { const u = BigInt(load('bal', '0')); return { units: u, ui: (Number(u) / 1e6).toString(), symbol: 'KIBBLE' }; }
   async buy({ itemId }) {
