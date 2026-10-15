@@ -38,14 +38,14 @@ const waitPhase = (pg, s, ms = 15000) => pg.waitForFunction((s) => window.__mb.m
     for (let i = 0; i < 20 && (await st(pg)).phase === 'fight'; i++) { await pg.keyboard.press('KeyF'); await pg.waitForTimeout(150); }
     if (r === 0) { await pg.waitForTimeout(200); await pg.screenshot({ path: 'proof/11-ko.png' }); }
   }
-  await waitPhase(pg, 'finish', 8000); await pg.waitForTimeout(400); await pg.screenshot({ path: 'proof/12-finish-the-bag.png' }); ok('desktop: best-of-3 reaches FINISH THE BAG', (await st(pg)).wins[0] === 2);
+  await waitPhase(pg, 'finish', 8000); await pg.waitForTimeout(400); await pg.screenshot({ path: 'proof/12-punchline-time.png' }); ok('desktop: best-of-3 reaches PUNCHLINE TIME', (await st(pg)).wins[0] === 2);
   await pg.keyboard.press('KeyS'); await pg.waitForTimeout(60); await pg.keyboard.press('KeyS'); await pg.waitForTimeout(40); await pg.keyboard.press('KeyB');
-  await waitPhase(pg, 'finisher', 3000).then(() => ok('desktop: down-down+HK triggers Rug Pull finisher', true)).catch(() => ok('desktop: finisher', false));
+  await waitPhase(pg, 'finisher', 3000).then(() => ok('desktop: down-down+HK triggers the punchline finisher', true)).catch(() => ok('desktop: finisher', false));
   await pg.waitForTimeout(1300); await pg.screenshot({ path: 'proof/13-rug-pull-finisher.png' }); await pg.waitForTimeout(1600); await pg.screenshot({ path: 'proof/14-bag-secured.png' });
   await waitScr(pg, 'ladder', 8000).then(() => ok('desktop: ladder advances after win', true)).catch(() => ok('desktop: ladder advance', false));
   // shop
   await pg.keyboard.press('Escape'); await pg.waitForTimeout(100);
-  await pg.evaluate(() => { window.__mb.scr = 'menu'; window.__mb.menuI = 0; }); for (let i = 0; i < 3; i++) { await pg.keyboard.press('KeyS'); await pg.waitForTimeout(50); }
+  await pg.evaluate(() => { window.__mb.scr = 'menu'; window.__mb.menuI = 0; }); for (let i = 0; i < 4; i++) { await pg.keyboard.press('KeyS'); await pg.waitForTimeout(50); }
   await pg.keyboard.press('Enter'); await waitScr(pg, 'shop'); for (const k of ['KeyS', 'KeyS']) { await pg.keyboard.press(k); await pg.waitForTimeout(50); } await pg.keyboard.press('Enter'); await pg.waitForTimeout(200);
   for (const k of ['KeyW', 'KeyW']) { await pg.keyboard.press(k); await pg.waitForTimeout(50); } await pg.keyboard.press('Enter'); await pg.waitForTimeout(300); await pg.screenshot({ path: 'proof/15-shop.png' });
   const inv = await pg.evaluate(() => JSON.parse(localStorage.getItem('mb.inv') || '[]')); ok('desktop DEMO (?demo=1): wallet connect + buy skin (fake balance, fee-inclusive ledger)', inv.includes('gold'), JSON.stringify(inv));

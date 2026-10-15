@@ -1,6 +1,6 @@
 // Pixel arena backgrounds, painted at 320x180 then scaled 2x (matches fighter pixel size).
 const cache = {};
-const mk = (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h });
+const newCanvas = (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h });
 function rng(seed) { let s = seed; return () => ((s = (s * 16807) % 2147483647) / 2147483647); }
 function grad(c, y0, y1, stops) { const g = c.createLinearGradient(0, y0, 0, y1); stops.forEach((s, i) => g.addColorStop(i / (stops.length - 1), s)); c.fillStyle = g; c.fillRect(0, y0, 320, y1 - y0); }
 const R = (c, x, y, w, h, col) => { c.fillStyle = col; c.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); };
@@ -69,8 +69,8 @@ const PAINT = {
 
 export function stageCanvas(id) {
   if (cache[id]) return cache[id];
-  const lo = mk(320, 180), c = lo.getContext('2d'); c.imageSmoothingEnabled = false; c.fillStyle = '#120a1e'; c.fillRect(0, 0, 320, 180); (PAINT[id] || PAINT.mall)(c);
-  const hi = mk(640, 360), h = hi.getContext('2d'); h.imageSmoothingEnabled = false; h.drawImage(lo, 0, 0, 640, 360);
+  const lo = newCanvas(320, 180), c = lo.getContext('2d'); c.imageSmoothingEnabled = false; c.fillStyle = '#120a1e'; c.fillRect(0, 0, 320, 180); (PAINT[id] || PAINT.mall)(c);
+  const hi = newCanvas(640, 360), h = hi.getContext('2d'); h.imageSmoothingEnabled = false; h.drawImage(lo, 0, 0, 640, 360);
   return (cache[id] = hi);
 }
 // animated overlay

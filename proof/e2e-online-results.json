@@ -1,0 +1,92 @@
+{
+ "at": "2026-10-15T05:56:47.914Z",
+ "url": "http://localhost:45863/",
+ "kibble": "http://localhost:8799",
+ "results": [
+  {
+   "name": "desktop: private room created with a share code",
+   "pass": true,
+   "extra": "NUL5VL"
+  },
+  {
+   "name": "desktop: two browser contexts matched and connected",
+   "pass": true,
+   "extra": "via p2p"
+  },
+  {
+   "name": "desktop private room (WebRTC): both clients finished the online match",
+   "pass": true,
+   "extra": "done/done via p2p/p2p delay 4"
+  },
+  {
+   "name": "desktop private room (WebRTC): no desync, identical result reports (winner, rounds, hp, ticks, checksum)",
+   "pass": true,
+   "extra": "{\"winner\":0,\"wins\":[2,0],\"hp\":1000,\"ticks\":2503,\"checksum\":\"b0a341af\"}"
+  },
+  {
+   "name": "desktop private room (WebRTC): server verified the result (both clients agree)",
+   "pass": true,
+   "extra": "Verified by both players. casual match (not ranked) | Verified by both players. Casual match: no prizes."
+  },
+  {
+   "name": "desktop: WebRTC peer-to-peer data channel used",
+   "pass": true,
+   "extra": "p2p"
+  },
+  {
+   "name": "desktop: no page errors",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "name": "desktop ranked quick match: both clients finished the online match",
+   "pass": true,
+   "extra": "done/done via relay/p2p delay 4"
+  },
+  {
+   "name": "desktop ranked quick match: no desync, identical result reports (winner, rounds, hp, ticks, checksum)",
+   "pass": true,
+   "extra": "{\"winner\":0,\"wins\":[2,0],\"hp\":1000,\"ticks\":2467,\"checksum\":\"ba2c1aa5\"}"
+  },
+  {
+   "name": "desktop ranked quick match: server verified the result (both clients agree)",
+   "pass": true,
+   "extra": "Verified by both players. Ranked win posted: 2500 pts on the prize board | Verified by both players. Ranked loss."
+  },
+  {
+   "name": "ranked: verified PvP win posted to /api/game prize board for the winner wallet",
+   "pass": true,
+   "extra": "[{\"rank\":1,\"wallet\":\"YiMx5UH9CTW2Sdhq4Kf1icyHEj264qJo47KLBBnKbt6\",\"score\":2500}]"
+  },
+  {
+   "name": "ranked: client-submitted (e.g. vs CPU) meme-brawl scores are refused",
+   "pass": true,
+   "extra": "403"
+  },
+  {
+   "name": "iPhone landscape (relay fallback): both clients finished the online match",
+   "pass": true,
+   "extra": "done/done via relay/relay delay 10"
+  },
+  {
+   "name": "iPhone landscape (relay fallback): no desync, identical result reports (winner, rounds, hp, ticks, checksum)",
+   "pass": true,
+   "extra": "{\"winner\":0,\"wins\":[2,0],\"hp\":1000,\"ticks\":2887,\"checksum\":\"fe9bdb42\"}"
+  },
+  {
+   "name": "iPhone landscape (relay fallback): server verified the result (both clients agree)",
+   "pass": true,
+   "extra": "Verified by both players. Casual match: no prizes. | Verified by both players. casual match (not ranked)"
+  },
+  {
+   "name": "iPhone: server relay fallback used when WebRTC is unavailable",
+   "pass": true,
+   "extra": "relay"
+  },
+  {
+   "name": "disconnect: opponent leaving ends the match as a forfeit",
+   "pass": true,
+   "extra": "forfeit after 10107ms"
+  }
+ ]
+}

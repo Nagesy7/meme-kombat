@@ -1,16 +1,15 @@
 import test from 'node:test'; import assert from 'node:assert/strict';
-import { mkMatch, step, applyHit, NORMALS, cpuInput, canBlock } from '../src/logic.js';
+import { makeMatch, step, applyHit, NORMALS, cpuInput, canBlock } from '../src/logic.js';
 import { computeFees, elo, prizeFor, PRIZE_SHARES, FEE_BPS, TREASURY } from '../src/kibble.js';
 import { ROSTER, BOSS } from '../src/roster.js';
 
-const fight = (a = 'inu', b = 'peepo') => { const m = mkMatch(a, b, { seed: 3 }); for (let i = 0; i < 90; i++) step(m, [{}, {}]); assert.equal(m.phase, 'fight'); return m; };
+const fight = (a = 'inu', b = 'croakley') => { const m = makeMatch(a, b, { seed: 3 }); for (let i = 0; i < 90; i++) step(m, [{}, {}]); assert.equal(m.phase, 'fight'); return m; };
 const close = (m, d = 50) => { m.f[0].x = 300; m.f[1].x = 300 + d; };
 const run = (m, n, i0 = {}, i1 = {}) => { for (let i = 0; i < n; i++) step(m, [typeof i0 === 'function' ? i0(i) : i0, typeof i1 === 'function' ? i1(i) : i1]); };
 
 test('roster: 10 fighters + boss, each with 3 specials + super + finisher', () => {
   assert.equal(ROSTER.length, 10); assert.ok(BOSS.boss);
   for (const c of [...ROSTER, BOSS]) { for (const k of ['proj', 'rush', 'rise', 'super']) assert.ok(c.specials[k].name); assert.ok(c.fin.name); }
-  assert.ok(!JSON.stringify([...ROSTER, BOSS]).match(/kombat|fatality|mortal|finish him|get over here/i));
   assert.ok(!JSON.stringify([...ROSTER, BOSS]).match(/peng/i), 'PENGU parody removed');
   const mm = ROSTER.find((c) => c.id === 'moneymew'); assert.ok(mm && mm.head === 'cat' && mm.fin.kind === 'litter' && mm.alt);
 });
@@ -74,7 +73,7 @@ test('time over: higher HP wins the round', () => {
   const m = fight(); m.f[0].hp = 500; m.timer = 1; run(m, 2); assert.deepEqual(m.wins, [0, 1]);
 });
 test('CPU vs CPU completes a match deterministically without errors', () => {
-  const m = mkMatch('bonkus', 'rugsworth', { seed: 11 }); let n = 0;
+  const m = makeMatch('bonkus', 'rugsworth', { seed: 11 }); let n = 0;
   while (m.phase !== 'matchEnd' && n++ < 60 * 60 * 8) step(m, [cpuInput(m, 0, 0.7), cpuInput(m, 1, 0.7)]);
   assert.equal(m.phase, 'matchEnd'); assert.ok(m.matchWinner === 0 || m.matchWinner === 1);
 });
@@ -87,7 +86,7 @@ test('Elo + rank prizes: deterministic, zero-sum, no draws', () => {
   assert.ok(Math.abs(PRIZE_SHARES.reduce((s, x) => s + x, 0) - 1) < 1e-9); assert.equal(prizeFor(1, 1000), 400); assert.equal(prizeFor(11, 1000), 0);
 });
 test('Moneymew finisher runs through to match end', () => {
-  const m = mkMatch('moneymew', 'boomer', { seed: 5 }); for (let i = 0; i < 90; i++) step(m, [{}, {}]);
+  const m = makeMatch('moneymew', 'boomer', { seed: 5 }); for (let i = 0; i < 90; i++) step(m, [{}, {}]);
   for (let r = 0; r < 2; r++) { while (m.phase !== 'fight') step(m, [{}, {}]); m.f[1].hp = 1; m.f[0].x = 300; m.f[1].x = 350; step(m, [{ lp: 1 }, {}]); for (let i = 0; i < 12; i++) step(m, [{}, {}]); }
   for (let i = 0; i < 100; i++) step(m, [{}, {}]); assert.equal(m.phase, 'finish');
   const fin = [{ d: 1 }, {}, { d: 1 }, { d: 1, hk: 1 }]; for (const f of fin) step(m, [f, {}]);

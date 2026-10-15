@@ -19,18 +19,18 @@ export const NORMALS = {
 };
 export const THROW = { dmg: 120, range: 62 };
 
-export function mkRng(seed = 1) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+export function makeRng(seed = 1) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
 
-export function mkFighter(id, side, opts = {}) {
+export function makeFighter(id, side, opts = {}) {
   const ch = byId(id);
   const hp = opts.hp ?? ch.hp ?? MAX_HP;
   return { id, ch, side, x: side === 0 ? 200 : 440, y: 0, vx: 0, vy: 0, face: side === 0 ? 1 : -1, hp, maxHp: hp, meter: 0,
     st: 'idle', t: 0, move: null, hitDone: false, combo: 0, juggle: 0, buf: [], prev: {}, lastDir: 5, inv: 0, crouch: false, skin: opts.skin || 'base', hitFlash: 0, specialName: null };
 }
 
-export function mkMatch(p1, p2, opts = {}) {
-  const m = { f: [mkFighter(p1, 0, opts.o1), mkFighter(p2, 1, opts.o2)], round: 1, wins: [0, 0], timer: ROUND_FRAMES, phase: 'intro', pt: 0,
-    proj: [], events: [], banner: null, rng: mkRng(opts.seed || 7), tick: 0, winner: null, matchWinner: null, finisher: null, hitstop: 0, stage: opts.stage || byId(p2).stage, opts };
+export function makeMatch(p1, p2, opts = {}) {
+  const m = { f: [makeFighter(p1, 0, opts.o1), makeFighter(p2, 1, opts.o2)], round: 1, wins: [0, 0], timer: ROUND_FRAMES, phase: 'intro', pt: 0,
+    proj: [], events: [], banner: null, rng: makeRng(opts.seed || 7), tick: 0, winner: null, matchWinner: null, finisher: null, hitstop: 0, stage: opts.stage || byId(p2).stage, opts };
   say(m, 'ROUND 1', 70);
   return m;
 }
@@ -208,7 +208,7 @@ export function step(m, inputs) {
   stepFighter(m, a, b); stepFighter(m, b, a); separate(m);
   if (m.phase === 'ko') {
     if (m.pt === 90) {
-      if (m.matchWinner != null) { const w = m.f[m.matchWinner], l = m.f[1 - m.matchWinner]; if (l.hp <= 0) { l.hp = 0; l.st = 'dizzy'; l.y = 0; l.vx = 0; } else l.st = 'dizzy'; w.st = 'idle'; w.buf = []; m.phase = 'finish'; m.pt = 0; say(m, 'FINISH THE BAG', 150, `${w.ch.fin.name}: tap D, D + HK`); }
+      if (m.matchWinner != null) { const w = m.f[m.matchWinner], l = m.f[1 - m.matchWinner]; if (l.hp <= 0) { l.hp = 0; l.st = 'dizzy'; l.y = 0; l.vx = 0; } else l.st = 'dizzy'; w.st = 'idle'; w.buf = []; m.phase = 'finish'; m.pt = 0; say(m, 'PUNCHLINE TIME', 150, `${w.ch.fin.name}: tap D, D + HK`); }
       else { m.f[m.winner ?? 0] && m.winner != null && (m.f[m.winner].st = 'win'); m.phase = 'roundEnd'; m.pt = 0; }
     }
   } else if (m.phase === 'finish') {
@@ -253,12 +253,12 @@ export function cpuInput(m, idx, level = 0.5) {
   if (o.st === 'air' && dist < 90 && f.st === 'idle' && r() < level) { ai.seq = [{ hk: 1 }]; return inp; }
   if (++ai.t < 4 + (1 - level) * 10) { if (ai.plan) inp[ai.plan] = 1; return inp; }
   ai.t = 0; const x = r();
-  const mk = (seq) => { ai.seq = seq.map((s) => { const o2 = {}; for (const k in s) o2[k === 'F' ? fwd : k === 'B' ? back : k] = s[k]; return o2; }); };
-  if (f.meter >= 100 && dist < 160 && x < 0.5) { mk([{ d: 1 }, { d: 1, F: 1 }, { F: 1 }, { F: 1, hk: 1 }]); return inp; }
-  if (dist > 220) { ai.plan = x < 0.35 ? null : fwd; if (x < 0.3) mk([{ d: 1 }, { d: 1, F: 1 }, { F: 1 }, { F: 1, lp: 1 }]); else if (x < 0.4) { mk([{ u: 1, F: 1 }]); } return inp; }
-  if (dist > 85) { ai.plan = fwd; if (x < 0.15) mk([{ B: 1 }, { F: 1 }, { F: 1, lk: 1 }]); else if (x < 0.25) mk([{ u: 1, F: 1 }, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { hk: 1 }]); return inp; }
+  const queue = (seq) => { ai.seq = seq.map((s) => { const o2 = {}; for (const k in s) o2[k === 'F' ? fwd : k === 'B' ? back : k] = s[k]; return o2; }); };
+  if (f.meter >= 100 && dist < 160 && x < 0.5) { queue([{ d: 1 }, { d: 1, F: 1 }, { F: 1 }, { F: 1, hk: 1 }]); return inp; }
+  if (dist > 220) { ai.plan = x < 0.35 ? null : fwd; if (x < 0.3) queue([{ d: 1 }, { d: 1, F: 1 }, { F: 1 }, { F: 1, lp: 1 }]); else if (x < 0.4) { queue([{ u: 1, F: 1 }]); } return inp; }
+  if (dist > 85) { ai.plan = fwd; if (x < 0.15) queue([{ B: 1 }, { F: 1 }, { F: 1, lk: 1 }]); else if (x < 0.25) queue([{ u: 1, F: 1 }, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { hk: 1 }]); return inp; }
   ai.plan = null;
   const opts = [[{ lp: 1 }, {}, {}, {}, {}, {}, {}, { lp: 1 }, {}, {}, {}, {}, {}, {}, {}, {}, { d: 1, hp: 1 }], [{ hk: 1 }], [{ d: 1, hk: 1 }], [{ d: 1, lk: 1 }, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { hp: 1 }], [{ F: 1, hp: 1 }], [{ B: 1 }, { B: 1 }, { B: 1 }, { B: 1 }, { B: 1 }, { B: 1 }]];
-  mk(opts[Math.floor(r() * opts.length)]);
+  queue(opts[Math.floor(r() * opts.length)]);
   return inp;
 }
