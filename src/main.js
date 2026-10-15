@@ -90,12 +90,13 @@ function selectStep() {
 function startFight() { if (G.mode === 'arcade') { G.p2 = G.ladder[G.li]; G.cpuLevel = 0.35 + G.li * 0.09; } go('versus'); }
 function beginMatch() {
   const o2 = { skin: G.mode === 'versus' ? G.skin[1] : 'base' }; if (G.p1 === G.p2) o2.skin = o2.skin === 'base' ? 'alt' : 'base';
-  G.match = mkMatch(G.p1, G.p2, { o1: { skin: G.skin[0] }, o2, seed: Date.now() & 0xffff }); G.fx = []; go('fight'); music(G.match.stage);
+  G.match = mkMatch(G.p1, G.p2, { o1: { skin: G.skin[0] }, o2, seed: Date.now() & 0xffff }); G.matchStart = Date.now(); G.fx = []; go('fight'); music(G.match.stage);
 }
 function matchOver() {
   const m = G.match, won = m.matchWinner === 0;
   if (G.mode === 'versus') return go('gameover');
-  if (G.mode === 'ranked') { const before = K.profile().rating, p = K.recordRanked(G.rankOpp.rating, won); G.lastRank = { won, before, after: p.rating, opp: G.rankOpp }; return go('rankres'); }
+  if (G.mode === 'ranked') { const before = K.profile().rating, p = K.recordRanked(G.rankOpp.rating, won); G.lastRank = { won, before, after: p.rating, opp: G.rankOpp };
+    if (won && K.wallet.submitScore && K.wallet.address) { const sc = K.matchScore(m); K.wallet.submitScore(sc, Date.now() - G.matchStart).then((r) => { G.lastRank.posted = r.ok ? `Posted ${sc} to the weekly prize board` : r.reason; K.refreshServer().catch(() => {}); }).catch((e) => { G.lastRank.posted = 'Score not posted: ' + e.message; }); } return go('rankres'); }
   if (won) { G.li++; if (G.li >= G.ladder.length) return go('ending'); go('ladder'); } else go('gameover');
 }
 
@@ -261,27 +262,33 @@ function drawHelp() {
   L.forEach((s, i) => text(s, 30, 56 + i * 24, 8, '#fff6e0', 'left', SMALL, null)); btn(0, 0, W, H, () => go('menu'));
 }
 async function shopAct(i) {
-  if (i < K.SHOP.length) { const it = K.SHOP[i]; if (!K.wallet.address) { G.msg = 'Connect a wallet first'; return; } const r = await K.wallet.buy({ itemId: it.id, price: it.price }); G.msg = r.ok ? `Bought ${it.name}! sig ${String(r.signature).slice(0, 14)}` : `Failed: ${r.error}`; if (r.ok) sfx('coin'); }
-  else if (i === K.SHOP.length) { if (K.wallet.address) await K.wallet.disconnect(); else await K.wallet.connect(); G.msg = K.wallet.address ? 'Connected (simulated wallet, 2,500 test KIBBLE)' : 'Disconnected'; }
-  else { const r = await K.wallet.burn(10); G.msg = r.ok ? 'Burned 10 KIBBLE. Respect.' : `Burn failed: ${r.error}`; }
+  if (i < K.SHOP.length) { const it = K.SHOP[i]; if (K.mode !== 'live' && K.mode !== 'demo') { G.msg = K.SOON_MSG; return; } if (!K.wallet.address) { G.msg = 'Connect a wallet first'; return; } const r = await K.wallet.buy({ itemId: it.id }); G.msg = r.ok ? `Bought ${it.name}! sig ${String(r.signature).slice(0, 14)}` : `${r.error === K.SOON_MSG ? '' : 'Failed: '}${r.error}`; if (r.ok) sfx('coin'); }
+  else if (i === K.SHOP.length) { if (K.wallet.address) await K.wallet.disconnect(); else { try { await K.wallet.connect(); } catch (e) { G.msg = 'Wallet: ' + e.message; refreshOwned(); return; } } if (K.wallet.address && !K.wallet.simulated) K.loadShiba().catch(() => {}); G.msg = K.wallet.address ? (K.wallet.simulated ? 'DEMO wallet connected (fake 2,500 KIBBLE)' : 'Wallet signed in. Ranked wins now post to the prize board.') : 'Disconnected'; }
+  else { const r = await K.wallet.burn(10, 'respect'); G.msg = r.ok ? 'Burned 10 KIBBLE (destroyed, optional). Respect.' : `${r.error}`; }
   refreshOwned();
 }
 function drawShop() {
   ctx.drawImage(stageCanvas('mall'), 0, 0); ctx.fillStyle = 'rgba(6,4,20,.78)'; ctx.fillRect(0, 0, W, H); text('SKIN SHOP', 320, 20, 16, '#ffd25a');
-  text(K.wallet.simulated ? 'SIMULATED $KIBBLE: no real tokens move' : 'LIVE kibblePay wallet', 320, 40, 7, '#ff5aa8');
-  const items = [...K.SHOP.map((s) => [`${s.name}  ${s.price} KIBBLE${G.owned.includes(s.id) ? '  (OWNED)' : ''}`, s]), [K.wallet.address ? `DISCONNECT ${K.wallet.address.slice(0, 4)}..${K.wallet.address.slice(-4)}` : 'CONNECT WALLET'], ['BURN 10 KIBBLE']];
+  text(K.mode === 'demo' ? 'DEMO MODE (?demo=1): fake KIBBLE, nothing real' : K.mode === 'live' ? 'LIVE $KIBBLE via Phantom' : K.SOON_MSG, 320, 40, 7, '#ff5aa8');
+  const items = [...K.SHOP.map((s) => [`${s.name}  ${s.price} KIBBLE${G.owned.includes(s.id) ? '  (OWNED)' : ''}`, s]), [K.wallet.address ? `DISCONNECT ${K.wallet.address.slice(0, 4)}..${K.wallet.address.slice(-4)}` : 'CONNECT WALLET'], ['OPTIONAL: BURN 10 KIBBLE (destroys it)']];
   items.forEach(([n], i) => { const y = 70 + i * 34, on = G.shopI === i; panel(30, y - 13, 290, 26, on ? '#3a2060' : '#121a36', on ? '#ffd25a' : '#4a4f8c'); text(n, 40, y, 7, '#fff6e0', 'left'); btn(30, y - 13, 290, 26, () => { G.shopI = i; shopAct(i); }); });
   const it = K.SHOP[Math.min(G.shopI, K.SHOP.length - 1)], f = K.computeFees(K.toBase(it.price));
-  panel(340, 58, 270, 150, '#121a36'); text(`FEES on ${it.price} KIBBLE (2%)`, 350, 72, 7, '#ffd25a', 'left');
+  panel(340, 58, 270, 150, '#121a36'); text(`${it.price} KIBBLE, 2% fee included:`, 350, 72, 7, '#ffd25a', 'left');
   [['Treasury 1%', f.treasury, 'BzLY..TNGJ'], ['Daily pool 0.25%', f.daily, ''], ['Weekly pool 0.5%', f.weekly, ''], ['Monthly pool 0.25%', f.monthly, '']].forEach(([n, v, a], j) => text(`${n}: ${K.fromBase(v)} ${a}`, 350, 92 + j * 16, 7, '#fff6e0', 'left', SMALL, null));
   text(`Treasury: ${K.TREASURY.slice(0, 22)}`, 350, 160, 6, '#9ab0d4', 'left', SMALL, null); text(`          ${K.TREASURY.slice(22)}`, 350, 172, 6, '#9ab0d4', 'left', SMALL, null);
-  const P = K.poolsUi(); text(`Pools: D ${P.daily.toFixed(2)}  W ${P.weekly.toFixed(2)}  M ${P.monthly.toFixed(2)}`, 350, 194, 6, '#3fb6a8', 'left', SMALL, null);
+  const P = K.poolsUi(); text(`${K.mode === 'demo' ? 'Demo pools' : 'Live pools'}: D ${P.daily.toFixed(2)}  W ${P.weekly.toFixed(2)}  M ${P.monthly.toFixed(2)}`, 350, 194, 6, '#3fb6a8', 'left', SMALL, null);
   drawSprite(byId('inu'), 'idle', it.id, 400, 340, 1.6, 1); drawSprite(byId('peepo'), 'idle', it.id, 460, 340, 1.6, 1); drawSprite(byId('moneymew'), 'idle', it.id, 520, 340, 1.6, -1);
   text(`BALANCE: ${G.bal ?? '-'} KIBBLE   HOLDER: ${G.holder ? 'YES (alts unlocked)' : 'no (needs 1000)'}`, 30, 250, 7, '#fff6e0', 'left', SMALL, null);
   // ranked board
-  panel(30, 266, 290, 84, '#121a36', '#4a4f8c'); const lb = K.leaderboard(), me = lb.find((e) => e.you), pool = P.weekly;
-  text(`RANKED (weekly pool by final rank; no draws, free entry)`, 36, 276, 6, '#ffd25a', 'left', SMALL, null);
-  lb.slice(0, 4).concat(me.rank > 4 ? [me] : []).forEach((e, j) => text(`#${e.rank} ${e.name.padEnd(13)} ${e.rating}  prize ${K.prizeFor(e.rank, pool)}`, 36, 290 + j * 12, 6, e.you ? '#3ec46a' : '#fff6e0', 'left', SMALL, null));
+  panel(30, 266, 290, 84, '#121a36', '#4a4f8c');
+  if (K.mode === 'demo') { const lb = K.leaderboard(), me = lb.find((e) => e.you), pool = P.weekly;
+    text(`DEMO LADDER (fake prizes)`, 36, 276, 6, '#ffd25a', 'left', SMALL, null);
+    lb.slice(0, 4).concat(me.rank > 4 ? [me] : []).forEach((e, j) => text(`#${e.rank} ${e.name.padEnd(13)} ${e.rating}  prize ${K.prizeFor(e.rank, pool)}`, 36, 290 + j * 12, 6, e.you ? '#3ec46a' : '#fff6e0', 'left', SMALL, null)); }
+  else { const lb = K.serverBoard || [], me = K.wallet.address;
+    text(`WEEKLY PRIZE BOARD (wallet-signed, free entry, skill only)`, 36, 276, 6, '#ffd25a', 'left', SMALL, null);
+    if (!lb.length) text('No ranked wins posted yet this week. Sign in and win!', 36, 292, 6, '#fff6e0', 'left', SMALL, null);
+    lb.slice(0, 5).forEach((e, j) => text(`#${e.rank} ${e.wallet.slice(0, 4)}..${e.wallet.slice(-4)}  ${e.score}`, 36, 290 + j * 12, 6, e.wallet === me ? '#3ec46a' : '#fff6e0', 'left', SMALL, null)); }
+  if (K.shiba) { const c = K.shiba.canvas(1.2); ctx.drawImage(c, 606 - c.width / 2, 318 - c.height); text(K.shiba.profile.name, 606, 326, 6, '#ffd25a', 'center', SMALL, null); }
   if (G.msg) text(G.msg, 320, 230, 7, '#3ec46a', 'center', SMALL, null); btn(560, 332, 72, 24, () => go('menu')); text('BACK', 596, 344, 8, '#9ab0d4');
 }
 
@@ -313,7 +320,7 @@ function render() {
     case 'title': drawTitle(); break; case 'menu': drawMenu(); break; case 'select': drawSelect(); break; case 'versus': drawVersus(); break; case 'ladder': drawLadder(); break; case 'shop': drawShop(); break; case 'help': drawHelp(); break;
     case 'gameover': drawEnd(G.mode === 'versus' ? `${G.match.f[G.match.matchWinner].ch.name.toUpperCase()} WINS` : 'GOT RUGGED', G.mode === 'versus' ? ['GG. Rematch from the menu.'] : ['The ladder humbled you.', 'Diamond paws. Try again.'], '#ff5a5a'); break;
     case 'ending': drawEnd('LADDER CLEARED', [`${byId(G.p1).name} rugged Lord Rugsworth.`, 'The Kibble Verse is safe. Wen sequel.'], '#ffd25a'); drawSprite(byId(G.p1), Math.floor(G.t / 20) % 2 ? 'win' : 'win2', G.skin[0], 320, 300, 2.4, 1); break;
-    case 'rankres': { const r = G.lastRank; drawEnd(r.won ? 'RANKED WIN' : 'RANKED LOSS', [`vs ${r.opp.name}`, `ELO ${r.before} -> ${r.after} (${r.after - r.before >= 0 ? '+' : ''}${r.after - r.before})`, `Current rank #${K.leaderboard().find((e) => e.you).rank}`], r.won ? '#3ec46a' : '#ff5a5a'); break; }
+    case 'rankres': { const r = G.lastRank; drawEnd(r.won ? 'RANKED WIN' : 'RANKED LOSS', [`vs ${r.opp.name}`, `ELO ${r.before} -> ${r.after} (${r.after - r.before >= 0 ? '+' : ''}${r.after - r.before})`, `Current rank #${K.leaderboard().find((e) => e.you).rank}`, ...(r.posted ? [r.posted] : [])], r.won ? '#3ec46a' : '#ff5a5a'); break; }
     case 'fight': {
       const m = G.match; ctx.drawImage(stageCanvas(m.stage), 0, 0); stageFx(ctx, m.stage, m.tick);
       if (m.phase === 'finisher' || m.phase === 'finish') { ctx.fillStyle = `rgba(20,0,10,${Math.min(0.5, m.pt / 60)})`; ctx.fillRect(0, 0, W, H); }
@@ -328,7 +335,7 @@ let acc = 0, last = performance.now();
 function frame(now) { acc += Math.min(100, now - last); last = now; let n = 0; while (acc >= 1000 / 60 && n < 5) { update(); acc -= 1000 / 60; n++; } render(); requestAnimationFrame(frame); }
 document.fonts?.load(`16px ${FONT}`).finally(() => requestAnimationFrame(frame));
 if (!document.fonts) requestAnimationFrame(frame);
-const kp = new URLSearchParams(location.search).get('kibble'); if (kp) K.useKibblePay(kp).catch((e) => console.warn('kibblePay unavailable, staying simulated', e));
+const kp = new URLSearchParams(location.search).get('kibble'); if (!K.DEMO) K.initKibble(kp || undefined).catch((e) => console.warn('kibble-pay unavailable', e));
 // fit canvas
 function fit() { const vw = innerWidth, vh = innerHeight, s = Math.min(vw / W, vh / H); cv.style.width = Math.floor(W * s) + 'px'; cv.style.height = Math.floor(H * s) + 'px'; }
 addEventListener('resize', fit); fit();

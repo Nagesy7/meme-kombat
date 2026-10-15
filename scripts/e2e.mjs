@@ -13,7 +13,7 @@ const waitPhase = (pg, s, ms = 15000) => pg.waitForFunction((s) => window.__mb.m
 // ---------- desktop ----------
 {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 720 } }), pg = await ctx.newPage(), errs = []; pg.on('pageerror', (e) => { errs.push(e.message); console.log('PAGEERR', e.message); });
-  await pg.goto(URL); await pg.waitForTimeout(700); await pg.screenshot({ path: 'proof/01-title.png' });
+  await pg.goto(URL + '?demo=1'); await pg.waitForTimeout(700); await pg.screenshot({ path: 'proof/01-title.png' });
   await pg.keyboard.press('Enter'); await waitScr(pg, 'menu'); await pg.waitForTimeout(200); await pg.screenshot({ path: 'proof/02-menu.png' });
   await pg.keyboard.press('Enter'); await waitScr(pg, 'select'); await pg.waitForTimeout(300); await pg.screenshot({ path: 'proof/03-select.png' }); ok('desktop: menu -> character select', true);
   await pg.keyboard.press('KeyF'); await waitScr(pg, 'ladder'); await pg.waitForTimeout(300); await pg.screenshot({ path: 'proof/04-ladder.png' });
@@ -48,7 +48,7 @@ const waitPhase = (pg, s, ms = 15000) => pg.waitForFunction((s) => window.__mb.m
   await pg.evaluate(() => { window.__mb.scr = 'menu'; window.__mb.menuI = 0; }); for (let i = 0; i < 3; i++) { await pg.keyboard.press('KeyS'); await pg.waitForTimeout(50); }
   await pg.keyboard.press('Enter'); await waitScr(pg, 'shop'); for (const k of ['KeyS', 'KeyS']) { await pg.keyboard.press(k); await pg.waitForTimeout(50); } await pg.keyboard.press('Enter'); await pg.waitForTimeout(200);
   for (const k of ['KeyW', 'KeyW']) { await pg.keyboard.press(k); await pg.waitForTimeout(50); } await pg.keyboard.press('Enter'); await pg.waitForTimeout(300); await pg.screenshot({ path: 'proof/15-shop.png' });
-  const inv = await pg.evaluate(() => JSON.parse(localStorage.getItem('mb.inv') || '[]')); ok('desktop: wallet connect + buy skin (simulated, 2% fee ledger)', inv.includes('gold'), JSON.stringify(inv));
+  const inv = await pg.evaluate(() => JSON.parse(localStorage.getItem('mb.inv') || '[]')); ok('desktop DEMO (?demo=1): wallet connect + buy skin (fake balance, fee-inclusive ledger)', inv.includes('gold'), JSON.stringify(inv));
   // versus 2P
   await pg.evaluate(() => { const G = window.__mb; G.mode = 'versus'; G.scr = 'select'; G.t = 0; });
   for (const k of ['KeyD', 'ArrowLeft', 'KeyB']) { await pg.keyboard.press(k); await pg.waitForTimeout(50); } await pg.waitForTimeout(150); await pg.screenshot({ path: 'proof/16-select-2p.png' });
@@ -58,6 +58,18 @@ const waitPhase = (pg, s, ms = 15000) => pg.waitForFunction((s) => window.__mb.m
   const v1 = await st(pg); ok('desktop: local 2P, P2 keys (arrows + K) hit P1', v1.hp[0] < v0.hp[0], `${v0.hp[0]} -> ${v1.hp[0]}`);
   ok('desktop: no page errors', errs.length === 0, errs.join(' | '));
   await ctx.close();
+}
+// ---------- real mode (no ?demo): kibble-pay SDK, mint not set -> "launching soon", footer, no fake balance ----------
+{
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 720 } }), pg = await ctx.newPage(), errs = []; pg.on('pageerror', (e) => errs.push(e.message));
+  await pg.goto(URL); await pg.waitForFunction(() => !!document.getElementById('inu-legal'), null, { timeout: 20000 }).catch(() => {});
+  ok('real mode: Terms / Prize Rules footer mounted', await pg.evaluate(() => /Terms.*Prize Rules/.test(document.getElementById('inu-legal')?.textContent || '')));
+  await pg.evaluate(() => { window.__mb.scr = 'shop'; window.__mb.shopI = 0; }); await pg.keyboard.press('Enter'); await pg.waitForTimeout(600);
+  const msg = await pg.evaluate(() => window.__mb.msg || '');
+  ok('real mode: buying shows "KIBBLE launching soon", no purchase', /launching soon/i.test(msg), msg);
+  ok('real mode: no fake balance written', await pg.evaluate(() => localStorage.getItem('mb.bal') === null));
+  await pg.screenshot({ path: 'proof/40-real-mode-shop-soon.png' });
+  ok('real mode: no page errors', errs.length === 0, errs.join(' | ')); await ctx.close();
 }
 // ---------- new fighter sheet: Moneymew, 4 skins x key poses ----------
 {

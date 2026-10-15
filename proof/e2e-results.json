@@ -7,12 +7,12 @@
   {
     "name": "desktop: real-key punches/kicks damage CPU",
     "pass": true,
-    "extra": "1000 -> 855"
+    "extra": "1000 -> 845"
   },
   {
     "name": "desktop: QCF+P fires a projectile",
     "pass": true,
-    "extra": "{\"scr\":\"fight\",\"phase\":\"fight\",\"hp\":[1000,855],\"wins\":[0,0],\"st\":[\"attack\",\"idle\"],\"meter\":[16,8],\"proj\":0,\"mv\":\"proj\",\"specials\":1}"
+    "extra": "{\"scr\":\"fight\",\"phase\":\"fight\",\"hp\":[1000,845],\"wins\":[0,0],\"st\":[\"attack\",\"idle\"],\"meter\":[16,8],\"proj\":0,\"mv\":\"proj\",\"specials\":1}"
   },
   {
     "name": "desktop: best-of-3 reaches FINISH THE BAG",
@@ -30,7 +30,7 @@
     "extra": ""
   },
   {
-    "name": "desktop: wallet connect + buy skin (simulated, 2% fee ledger)",
+    "name": "desktop DEMO (?demo=1): wallet connect + buy skin (fake balance, fee-inclusive ledger)",
     "pass": true,
     "extra": "[\"gold\"]"
   },
@@ -41,6 +41,26 @@
   },
   {
     "name": "desktop: no page errors",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "real mode: Terms / Prize Rules footer mounted",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "real mode: buying shows \"KIBBLE launching soon\", no purchase",
+    "pass": true,
+    "extra": "KIBBLE launching soon: purchases open at launch."
+  },
+  {
+    "name": "real mode: no fake balance written",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "real mode: no page errors",
     "pass": true,
     "extra": ""
   },

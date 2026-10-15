@@ -1,5 +1,5 @@
-// Simulated $KIBBLE hooks (matches /workspace/kibble-pay): fee split, wallet adapter, holder perks, Elo ranked ladder.
-// Everything here is SIMULATED unless a real kibblePay SDK is attached via useKibblePay().
+// $KIBBLE hooks: real kibble-pay adapter by default (purchases show 'launching soon' until the mint is set);
+// SimWallet + local ledger ONLY with ?demo=1. Elo ladder vs AI rivals is local; ranked wins post a wallet-signed score.
 export const TREASURY = 'BzLYTFAfUsjzQ5x8bx5BbPK4DFtaHrLCuferkvkxTNGJ';
 export const DECIMALS = 6;
 export const FEE_BPS = { treasury: 100, daily: 25, weekly: 50, monthly: 25 }; // 2% total: 1% treasury, 0.25/0.5/0.25% pools
@@ -37,9 +37,9 @@ export class SimWallet { // same surface as kibblePay: connect / balance / buy /
   async connect() { if (!this.address) { const A = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'; this.address = 'SiM' + Array.from({ length: 41 }, () => A[Math.floor(Math.random() * 58)]).join(''); save('addr', this.address); save('bal', '2500000000'); } return this.address; }
   async disconnect() { this.address = null; save('addr', null); }
   async balance() { const u = BigInt(load('bal', '0')); return { units: u, ui: (Number(u) / 1e6).toString(), symbol: 'KIBBLE' }; }
-  async buy({ itemId, price }) {
+  async buy({ itemId }) {
     if (!this.address) return { ok: false, error: 'Connect wallet first' };
-    const p = toBase(price), bal = BigInt(load('bal', '0')); if (bal < p) return { ok: false, error: 'Not enough KIBBLE' };
+    const p = toBase(SHOP.find((x) => x.id === itemId)?.price ?? 0), bal = BigInt(load('bal', '0')); if (bal < p) return { ok: false, error: 'Not enough KIBBLE' };
     save('bal', (bal - p).toString()); const f = computeFees(p); const L = load('ledger', { treasury: '0', daily: '0', weekly: '0', monthly: '0' });
     for (const k of ['treasury', 'daily', 'weekly', 'monthly']) L[k] = (BigInt(L[k]) + f[k]).toString(); save('ledger', L);
     const inv = load('inv', []); if (!inv.includes(itemId)) inv.push(itemId); save('inv', inv);
@@ -48,22 +48,44 @@ export class SimWallet { // same surface as kibblePay: connect / balance / buy /
   async burn(amount) { const p = toBase(amount), bal = BigInt(load('bal', '0')); if (bal < p) return { ok: false, error: 'Not enough KIBBLE' }; save('bal', (bal - p).toString()); save('burned', (BigInt(load('burned', '0')) + p).toString()); return { ok: true, signature: 'simburn_' + Date.now().toString(36) }; }
   async inventory() { return load('inv', []); }
 }
-export class KibblePayAdapter { // wraps the shared SDK from /workspace/kibble-pay/public/kibble-pay.js
+export const GAME = 'meme-brawl';
+export const SOON_MSG = 'KIBBLE launching soon: purchases open at launch.';
+export class KibblePayAdapter { // wraps the shared SDK (https://kibble-pay.vercel.app/kibble-pay.js). Catalog ids: meme-brawl:<id>, fee-inclusive.
   constructor(sdk) { this.k = sdk; this.simulated = false; }
+  get live() { return !!this.k.cfg?.provisioned; }
   get address() { return this.k.address; }
   async connect() { await this.k.connect(); await this.k.signIn(); return this.k.address; }
-  async balance() { return this.k.balance(); }
-  async buy({ itemId, price }) { return this.k.buy({ itemId: 'meme-brawl-' + itemId, price: String(price), game: 'meme-brawl' }); }
-  async burn(amount) { return this.k.burn(String(amount)); }
-  async inventory() { return (await this.k.inventory('meme-brawl')).map((i) => String(i.itemId || i).replace('meme-brawl-', '')); }
+  async disconnect() { await this.k.disconnect(); }
+  async balance() { return this.live ? this.k.balance() : { units: 0n, ui: '0', symbol: 'KIBBLE', soon: true }; }
+  async buy({ itemId }) { if (!this.live) return { ok: false, error: SOON_MSG }; return this.k.buy({ itemId: GAME + ':' + itemId, game: GAME }); }
+  async burn(amount, itemId) { if (!this.live) return { ok: false, error: SOON_MSG }; return this.k.burn(String(amount), { itemId, game: GAME }); }
+  async inventory() { const inv = (await this.k.inventory(GAME))?.[GAME] || {}; return Object.keys(inv).filter((k) => inv[k] > 0 && k.startsWith(GAME + ':')).map((k) => k.slice(GAME.length + 1)); }
+  async submitScore(score, durationMs) { return this.k.submitScore(GAME, score, durationMs); }
 }
-export let wallet = new SimWallet();
-export async function useKibblePay(apiBase) { const mod = await import(apiBase.replace(/\/$/, '') + '/kibble-pay.js'); await mod.kibblePay.init({ apiBase, game: 'meme-brawl' }); wallet = new KibblePayAdapter(mod.kibblePay); return wallet; }
-export async function isHolder() { if (!wallet.address) return false; return (await wallet.balance()).units >= HOLDER_MIN; }
+export const DEMO = typeof location !== 'undefined' && new URLSearchParams(location.search).get('demo') === '1';
+// Demo (fake balance) ONLY with ?demo=1. Otherwise the real kibblePay adapter; before the mint is set, buys show SOON_MSG.
+export let wallet = DEMO ? new SimWallet() : { simulated: false, address: null, live: false, async connect() { throw new Error('Wallet still loading, try again'); }, async balance() { return { units: 0n, ui: '0', soon: true }; }, async buy() { return { ok: false, error: SOON_MSG }; }, async burn() { return { ok: false, error: SOON_MSG }; }, async inventory() { return []; } };
+export let mode = DEMO ? 'demo' : 'loading';
+export let serverPools = null, serverBoard = null;
+export async function initKibble(apiBase = 'https://kibble-pay.vercel.app') {
+  const glue = glueMod = await import(apiBase + '/inu-games.js');
+  const K = await glue.initKibble({ game: GAME, apiBase }); mode = K.mode; glue.mountFooter(K.mode);
+  if (K.kp) { wallet = new KibblePayAdapter(K.kp); refreshServer(K.kp).catch(() => {}); }
+  return K;
+}
+export let shiba = null; // shared Inu Verse Shiba (profile) for the signed-in wallet
+let glueMod = null;
+export async function loadShiba() { if (!glueMod || !wallet.address || wallet.simulated) return null; shiba = await glueMod.loadShiba(wallet.address); return shiba; }
+export async function refreshServer(kp = wallet.k) { if (!kp) return; serverPools = (await kp.pools()).pools; serverBoard = (await kp.scores(GAME, 'weekly')).entries; }
+export async function useKibblePay(apiBase) { const mod = await import(apiBase.replace(/\/$/, '') + '/kibble-pay.js'); await mod.kibblePay.init({ apiBase, game: GAME }); wallet = new KibblePayAdapter(mod.kibblePay); mode = mod.kibblePay.cfg.provisioned ? 'live' : 'soon'; return wallet; }
+// ranked-win score (single match performance): 1000 + HP left (0..1000) + 500 for a flawless 2-0
+export const matchScore = (m) => { const f = m.f[0]; return 1000 + Math.round(1000 * Math.max(0, f.hp) / f.maxHp) + (m.wins[1] === 0 ? 500 : 0); };
+export async function isHolder() { if (!wallet.address) return false; try { return BigInt((await wallet.balance()).units) >= HOLDER_MIN; } catch { return false; } }
 export const ledger = () => load('ledger', { treasury: '0', daily: '0', weekly: '0', monthly: '0' });
 
 // ---- ranked profile ----
 export function profile() { return load('rank', { rating: 1200, w: 0, l: 0 }); }
 export function recordRanked(oppRating, won) { const p = profile(); const [r] = elo(p.rating, oppRating, won ? 1 : 0); p.rating = r; won ? p.w++ : p.l++; save('rank', p); return p; }
 export function leaderboard() { const p = profile(); return [...rivals(), { name: 'YOU', rating: p.rating, you: true }].sort((a, b) => b.rating - a.rating).map((e, i) => ({ ...e, rank: i + 1 })); }
-export function poolsUi() { const L = ledger(), seed = { daily: 5000, weekly: 20000, monthly: 60000 }; return Object.fromEntries(Object.entries(seed).map(([k, v]) => [k, v + fromBase(L[k])])); }
+// Pools: demo = local sim ledger; otherwise the real server ledger (/api/game?action=pools). No invented seed amounts.
+export function poolsUi() { if (mode === 'demo') { const L = ledger(); return Object.fromEntries(['daily', 'weekly', 'monthly'].map((k) => [k, fromBase(L[k])])); } return Object.fromEntries(['daily', 'weekly', 'monthly'].map((k) => [k, serverPools ? fromBase(serverPools[k].accruedBaseUnits) : 0])); }
