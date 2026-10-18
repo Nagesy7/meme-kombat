@@ -28,3 +28,18 @@ Zachary's call: once adopted this is the **only** touch layout (no toggle, no UR
 - **One input format.** `src/touchinput.js` `mergePad()` outputs exactly the keyboard pad (`{u,d,l,r,lp,hp,lk,hk}` = 1). JUMP is just `u`, so CPU, local and online lockstep (`netcode.encode`, 8 bits) are unchanged. Tests: `tests/touchinput.test.js` (format + encode round-trip, sectors, dead zone, per-pointer roles) and `scripts/e2e-stick.mjs` (two real simultaneous CDP touch pointers at 667x375, 750x342 and 844x390; now part of `npm run e2e`).
 - **Arena coverage.** At rest the stick is an 84-94px faint circle in the bottom-left corner, below the HUD, over the floor and stage edge. It's smaller than the old 120-137px D-pad. The right cluster is larger than the old 2x2 grid (about 150px square at 750x342) but mostly empty corner space. Neither can avoid overlapping the canvas entirely, because the canvas fills the phone screen.
 - **Screenshots:** `/workspace/meme-brawl-shots/stick/` holds `old-buttons-<size>.png` (production), `stick-<size>.png` (preview), `compare-<size>.png` (side by side) and `stick-diagonal-jump.gif`.
+
+## Right-wall fade (shipped in ff4553f, 2026-10-18)
+- **What:** while a fighter stands behind a touch control (`dimControls()` in `src/main.js`, checked every frame), that control fades to **28% opacity** (`.under`).
+- **What fades with the opponent at the right wall:**
+  - 667x375: JUMP, LK, HK
+  - 750x342: JUMP, LP, HP, LK
+  - 844x390: LP, HP, LK (JUMP sits outside the arena there)
+- **Why fade instead of moving the controls:** fighters stand on a ground line about 88% of the way down the screen. Tucking the cluster lower or further into the corner still overlaps an opponent at the wall. Squeezing the arc tighter makes the attack buttons overlap and shrinks JUMP below 72px. Fading keeps every control where the thumb expects it.
+- **Tap areas unchanged:** sizes, positions and hit areas don't change (JUMP stays 79/72/82px at the three sizes), and faded controls still register. `scripts/e2e-stick.mjs` asserts this at all three sizes.
+- **Screenshots:** `/workspace/meme-brawl-shots/stick/rightwall-{before,after,compare}-<size>.png`.
+
+## Verification status
+- **Live checks on ff4553f:** stick multi-touch test 42/42, e2e 19/19, and the casual online iPhone match over the relay (played with the stick) 4/4, verified with no desync.
+- **Live ranked check skipped on purpose.** Ranked uses the same input encoding (`netcode.encode` of the same pad format) and the same lockstep path as the verified casual match, so it would add no touch-input coverage. Also, the two `TEST_WALLETS` were made on the fly and their keys weren't kept, so they can't sign in for ranked.
+- **Pending:** a test on a real phone (iOS Safari and Android) with Zachary. All touch testing so far uses Chromium's emulated touch.
