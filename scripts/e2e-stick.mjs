@@ -11,7 +11,7 @@ const URL = process.env.URL || `http://localhost:${srv.address().port}/`, SHOTS 
 const results = []; const ok = (name, cond, extra = '') => { results.push({ name, pass: !!cond, extra }); console.log((cond ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : '')); };
 const b = await chromium.launch(); const sizes = (process.env.SIZES || '667x375,750x342,844x390').split(',').map((s) => s.split('x').map(Number));
 for (const [w, h] of sizes) {
-  const V = `${w}x${h}`, ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true }), pg = await ctx.newPage(), errs = [];
+  const V = `${w}x${h}`, ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, ...(process.env.STATE ? { storageState: process.env.STATE } : {}) }), pg = await ctx.newPage(), errs = [];
   pg.on('pageerror', (e) => errs.push(e.message));
   await pg.goto(URL); await pg.waitForTimeout(900);
   const box = async (s) => pg.locator(s).boundingBox(), C = (r) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
