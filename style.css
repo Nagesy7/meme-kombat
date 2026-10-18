@@ -22,3 +22,4 @@ body.touch #touch{display:block}
 #btns button.on{filter:brightness(1.8);transform:scale(.94)}
 @media (orientation:portrait){body.touch{align-items:flex-start;padding-top:calc(env(safe-area-inset-top) + 40px)}body.touch #stick{--S:30vw}body.touch #btns #jump{--J:22vw}body.touch #btns button{--B:15vw}}
 #stick.under,#btns button.under{opacity:.28} /* a fighter is behind this control (see dimControls) */
+#vaultLink{position:fixed;transform:translateY(-50%);font-family:ui-monospace,Menlo,Consolas,monospace;color:#9ab0d4;text-decoration:underline;z-index:3;white-space:nowrap;pointer-events:auto}#vaultLink[hidden]{display:none}

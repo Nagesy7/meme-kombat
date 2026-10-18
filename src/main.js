@@ -309,6 +309,11 @@ async function shopAct(i) {
   else { const r = await K.wallet.burn(100000, 'respect'); G.msg = r.ok ? 'Burned 100,000 KIBBLE (destroyed, optional). Respect.' : `${r.error}`; }
   refreshOwned();
 }
+// President's Vault (treasury, K.TREASURY) shown as a real link on the shop screen: canvas text can't be clicked
+const vaultLink = document.getElementById('vaultLink'); let vaultAt = null;
+vaultLink.href = `https://solscan.io/account/${K.TREASURY}`; vaultLink.textContent = `President's Vault: ${K.TREASURY.slice(0, 4)}\u2026${K.TREASURY.slice(-4)}`;
+function syncVaultLink() { const show = G.scr === 'shop' && !!vaultAt; if (vaultLink.hidden === show) vaultLink.hidden = !show; if (!show) { vaultAt = null; return; }
+  const r = cv.getBoundingClientRect(), s = r.width / W; vaultLink.style.left = r.left + vaultAt.x * s + 'px'; vaultLink.style.top = r.top + vaultAt.y * s + 'px'; vaultLink.style.fontSize = Math.max(9, 7 * s) + 'px'; vaultAt = null; }
 function drawShop() {
   ctx.drawImage(stageCanvas('mall'), 0, 0); ctx.fillStyle = 'rgba(6,4,20,.78)'; ctx.fillRect(0, 0, W, H); text('SKIN SHOP', 320, 20, 16, '#ffd25a');
   text(K.mode === 'demo' ? 'DEMO MODE (?demo=1): fake KIBBLE, nothing real' : K.mode === 'live' ? 'LIVE $KIBBLE via Phantom' : K.SOON_MSG, 320, 40, 7, '#ff5aa8');
@@ -316,8 +321,8 @@ function drawShop() {
   items.forEach(([n], i) => { const y = 70 + i * 34, on = G.shopI === i; panel(30, y - 13, 290, 26, on ? '#3a2060' : '#121a36', on ? '#ffd25a' : '#4a4f8c'); text(n, 40, y, 7, '#fff6e0', 'left'); btn(30, y - 13, 290, 26, () => { G.shopI = i; shopAct(i); }); });
   const it = K.SHOP[Math.min(G.shopI, K.SHOP.length - 1)], f = K.computeFees(K.toBase(it.price));
   panel(340, 58, 270, 150, '#121a36'); text(`${it.price} KIBBLE, 2% fee included:`, 350, 72, 7, '#ffd25a', 'left');
-  [['Treasury 1%', f.treasury, 'BzLY..TNGJ'], ['Daily pool 0.25%', f.daily, ''], ['Weekly pool 0.5%', f.weekly, ''], ['Monthly pool 0.25%', f.monthly, '']].forEach(([n, v, a], j) => text(`${n}: ${K.fromBase(v)} ${a}`, 350, 92 + j * 16, 7, '#fff6e0', 'left', SMALL, null));
-  text(`Treasury: ${K.TREASURY.slice(0, 22)}`, 350, 160, 6, '#9ab0d4', 'left', SMALL, null); text(`          ${K.TREASURY.slice(22)}`, 350, 172, 6, '#9ab0d4', 'left', SMALL, null);
+  [["President's Vault 1%", f.treasury, 'BzLY…TNGJ'], ['Daily pool 0.25%', f.daily, ''], ['Weekly pool 0.5%', f.weekly, ''], ['Monthly pool 0.25%', f.monthly, '']].forEach(([n, v, a], j) => text(`${n}: ${K.fromBase(v)} ${a}`, 350, 92 + j * 16, 7, '#fff6e0', 'left', SMALL, null));
+  vaultAt = { x: 350, y: 166 }; // President's Vault: BzLY…TNGJ, an HTML link (Solscan, new tab) laid over the canvas here; see syncVaultLink()
   const P = K.poolsUi(); text(`${K.mode === 'demo' ? 'Demo pools' : 'Live pools'}: D ${P.daily.toFixed(2)}  W ${P.weekly.toFixed(2)}  M ${P.monthly.toFixed(2)}`, 350, 194, 6, '#3fb6a8', 'left', SMALL, null);
   drawSprite(byId('inu'), 'idle', it.id, 400, 340, 1.6, 1); drawSprite(byId('croakley'), 'idle', it.id, 460, 340, 1.6, 1); drawSprite(byId('moneymew'), 'idle', it.id, 520, 340, 1.6, -1);
   text(`BALANCE: ${G.bal ?? '-'} KIBBLE   HOLDER: ${G.holder ? 'YES (alts unlocked)' : 'no (needs 1000)'}`, 30, 250, 7, '#fff6e0', 'left', SMALL, null);
@@ -438,7 +443,7 @@ let acc = 0, last = performance.now();
 // vsync snap: rAF timestamps wobble +-1-2ms; a raw 16.67ms accumulator ran 0 or 2 updates on many frames (stutter). Snap to whole 60Hz frames.
 export function snapMs(ms) { const k = Math.round(ms / (1000 / 60)); return k >= 1 && Math.abs(ms - k * 1000 / 60) < 2 ? k * 1000 / 60 : ms; }
 function frame(now) { acc += snapMs(Math.min(100, now - last)); last = now; let n = 0; while (acc >= 1000 / 60 - 1e-3 && n < 5) { update(); acc = Math.max(0, acc - 1000 / 60); n++; if (G.shake > 0) { G.shake *= 0.85; if (G.shake < 0.5) G.shake = 0; } }
-  (window.__stepHist ||= {})[n] = (window.__stepHist[n] || 0) + 1; /* jitter probe */ render(); dimControls(); requestAnimationFrame(frame); }
+  (window.__stepHist ||= {})[n] = (window.__stepHist[n] || 0) + 1; /* jitter probe */ render(); dimControls(); syncVaultLink(); requestAnimationFrame(frame); }
 document.fonts?.load(`16px ${FONT}`).finally(() => requestAnimationFrame(frame));
 if (!document.fonts) requestAnimationFrame(frame);
 const kp = new URLSearchParams(location.search).get('kibble'); if (QS.get('room')) { G.joinCode = QS.get('room').toUpperCase(); G.onKind = 'join'; G.onRanked = false; G.mode = 'online'; G.scr = 'select'; }
