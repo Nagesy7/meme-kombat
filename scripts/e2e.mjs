@@ -59,14 +59,15 @@ const waitPhase = (pg, s, ms = 15000) => pg.waitForFunction((s) => window.__mb.m
   ok('desktop: no page errors', errs.length === 0, errs.join(' | '));
   await ctx.close();
 }
-// ---------- real mode (no ?demo): kibble-pay SDK, mint not set -> "launching soon", footer, no fake balance ----------
+// ---------- real mode (no ?demo): kibble-pay SDK, $KIBBLE is live wording, footer, no fake balance ----------
 {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 720 } }), pg = await ctx.newPage(), errs = []; pg.on('pageerror', (e) => errs.push(e.message));
   await pg.goto(URL); await pg.waitForFunction(() => !!document.getElementById('inu-legal'), null, { timeout: 20000 }).catch(() => {});
   ok('real mode: Terms / Prize Rules footer mounted', await pg.evaluate(() => /Terms.*Prize Rules/.test(document.getElementById('inu-legal')?.textContent || '')));
   await pg.evaluate(() => { window.__mb.scr = 'shop'; window.__mb.shopI = 0; }); await pg.keyboard.press('Enter'); await pg.waitForTimeout(600);
   const msg = await pg.evaluate(() => window.__mb.msg || '');
-  ok('real mode: buying shows "KIBBLE launching soon", no purchase', /launching soon/i.test(msg), msg);
+  // $KIBBLE is live: no wallet -> "Connect a wallet first"; wallet service unreachable -> "KIBBLE is live, but ..."; never "launching soon"
+  ok('real mode: buying uses the live $KIBBLE wording (no "launching soon"), no purchase', /\$?KIBBLE is live|Connect a wallet first/i.test(msg) && !/launching soon/i.test(msg), msg);
   ok('real mode: no fake balance written', await pg.evaluate(() => localStorage.getItem('mb.bal') === null));
   await pg.screenshot({ path: 'proof/40-real-mode-shop-soon.png' });
   ok('real mode: no page errors', errs.length === 0, errs.join(' | ')); await ctx.close();
