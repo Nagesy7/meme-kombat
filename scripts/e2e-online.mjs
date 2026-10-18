@@ -50,7 +50,7 @@ async function joinByLink(pg, code, fighter = 3) {
 async function fight(att, def, ms = 180000, shotName) {
   const t0 = Date.now(); let shot = false;
   let cdp, fwd, hpBtn;
-  if (att.touch) { cdp = await att.context().newCDPSession(att); const d = await att.locator('#dpad').boundingBox(), side = (await G(att)).side, h = await att.locator('#btns button[data-k="hp"]').boundingBox();
+  if (att.touch) { cdp = await att.context().newCDPSession(att); const d = await att.locator('#stick').boundingBox(), side = (await G(att)).side, h = await att.locator('#btns button[data-k="hp"]').boundingBox();
     fwd = { x: d.x + d.width * (side ? 0.1 : 0.9), y: d.y + d.height / 2 }; hpBtn = { x: h.x + h.width / 2, y: h.y + h.height / 2 }; }
   // real touch input via the browser's touch pipeline (Input.dispatchTouchEvent -> pointer events)
   const touch = async (pt, ms) => { await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: pt.x, y: pt.y, id: 1 }] }); await att.waitForTimeout(ms); await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); };

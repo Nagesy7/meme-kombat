@@ -1,1 +1,1 @@
-{"name":"meme-brawl","private":true,"type":"module","scripts":{"test":"node --test tests/","e2e":"node scripts/e2e.mjs","e2e:online":"node scripts/e2e-online.mjs"},"devDependencies":{"playwright":"1.64.0"}}
+{"name":"meme-brawl","private":true,"type":"module","scripts":{"test":"node --test tests/","e2e":"node scripts/e2e.mjs && node scripts/e2e-stick.mjs","e2e:online":"node scripts/e2e-online.mjs","e2e:stick":"node scripts/e2e-stick.mjs"},"devDependencies":{"playwright":"1.64.0"}}

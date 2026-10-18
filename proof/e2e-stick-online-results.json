@@ -1,0 +1,27 @@
+{
+ "at": "2026-10-18T08:36:56.288Z",
+ "url": "http://localhost:34771/",
+ "kibble": "http://localhost:8799",
+ "results": [
+  {
+   "name": "iPhone landscape (relay fallback): both clients finished the online match",
+   "pass": true,
+   "extra": "done/done via relay/relay delay 8"
+  },
+  {
+   "name": "iPhone landscape (relay fallback): no desync, identical result reports (winner, rounds, hp, ticks, checksum)",
+   "pass": true,
+   "extra": "{\"winner\":0,\"wins\":[2,0],\"hp\":1000,\"ticks\":3394,\"checksum\":\"f7ecc2f8\"}"
+  },
+  {
+   "name": "iPhone landscape (relay fallback): server verified the result (both clients agree)",
+   "pass": true,
+   "extra": "Verified by both players. Casual match: no prizes. | Verified by both players. casual match (not ranked)"
+  },
+  {
+   "name": "iPhone: server relay fallback used when WebRTC is unavailable",
+   "pass": true,
+   "extra": "relay"
+  }
+ ]
+}

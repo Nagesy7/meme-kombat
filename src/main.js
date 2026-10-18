@@ -6,6 +6,7 @@ import { unlock, sfx, music, setMuted, isMuted } from './audio.js';
 import * as K from './kibble.js';
 import { Lockstep, stateHash, resultReport } from './netcode.js';
 import { OnlineSession, DISCONNECT_MS } from './online.js';
+import { stickDir, clampKnob, mergePad, PointerRoles, PAD_KEYS } from './touchinput.js';
 const QS = new URLSearchParams(location.search), API = QS.get('kibble') || 'https://kibble-pay.vercel.app';
 
 const cv = document.getElementById('game'), ctx = cv.getContext('2d'); ctx.imageSmoothingEnabled = false;
@@ -29,22 +30,46 @@ function readPads() {
   for (const c of new Set([...held, ...tapped])) { if (KEY1[c]) pads[0][KEY1[c]] = 1; if (KEY2[c]) pads[two ? 1 : 0][KEY2[c]] = 1; }
   for (const k in touchPad) if (touchPad[k] || touchTap[k]) pads[0][k] = 1;
   tapped.clear(); for (const k in touchTap) touchTap[k] = 0;
+  touch.classList.toggle('fight', G.scr === 'fight'); // the wide floating-stick zone only exists in fights (menus keep canvas taps)
 }
 const edge = (i, k) => pads[i][k] && !prevPads[i][k];
 
 // touch controls
 const touch = document.getElementById('touch');
 if (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) document.body.classList.add('touch');
-const dpad = document.getElementById('dpad');
-function dpadSet(e) { const r = dpad.getBoundingClientRect(), x = e.clientX - r.left - r.width / 2, y = e.clientY - r.top - r.height / 2, dead = r.width * 0.14;
-  touchPad.l = x < -dead ? 1 : 0; touchPad.r = x > dead ? 1 : 0; touchPad.u = y < -dead * 1.3 ? 1 : 0; touchPad.d = y > dead ? 1 : 0;
-  dpad.dataset.dir = (touchPad.u ? 'u' : '') + (touchPad.d ? 'd' : '') + (touchPad.l ? 'l' : '') + (touchPad.r ? 'r' : ''); }
-dpad.addEventListener('pointerdown', (e) => { unlock(); try { dpad.setPointerCapture(e.pointerId); } catch {} dpadSet(e); for (const k of ['u', 'd', 'l', 'r']) if (touchPad[k]) touchTap[k] = 1; e.preventDefault(); });
-dpad.addEventListener('pointermove', (e) => { if (e.buttons || e.pressure) dpadSet(e); });
-for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) dpad.addEventListener(ev, () => { touchPad.u = touchPad.d = touchPad.l = touchPad.r = 0; dpad.dataset.dir = ''; });
+// Touch: compact floating stick (left thumb) + big JUMP with attacks around it (right thumb). Every pointer is tracked by
+// its own pointerId (true multi-touch: stick + jump = diagonal jump; releasing one never cancels the other). The result
+// is merged into the SAME pad keys/format as the keyboard (touchinput.mergePad), so CPU, local and online lockstep match.
+const zone = document.getElementById('stickzone'), stick = document.getElementById('stick'), knob = document.getElementById('knob');
+const roles = new PointerRoles(); let stk = null, stickDirs = { u: 0, d: 0, l: 0, r: 0 };
+function syncTouch() {
+  const p = mergePad(stickDirs, roles.held('jump'), { lp: roles.held('lp'), hp: roles.held('hp'), lk: roles.held('lk'), hk: roles.held('hk') });
+  for (const k of PAD_KEYS) { const v = p[k] ? 1 : 0; if (v && !touchPad[k]) touchTap[k] = 1; touchPad[k] = v; }
+  stick.dataset.dir = (stickDirs.u ? 'u' : '') + (stickDirs.d ? 'd' : '') + (stickDirs.l ? 'l' : '') + (stickDirs.r ? 'r' : '');
+  for (const b of document.querySelectorAll('#btns button')) b.classList.toggle('on', roles.held(b.dataset.k));
+}
+function stickMove(e) { const c = clampKnob(stk.ox, stk.oy, e.clientX, e.clientY, stk.R * 0.62); stk.ox = c.ox; stk.oy = c.oy;
+  knob.style.setProperty('--kx', c.kx + 'px'); knob.style.setProperty('--ky', c.ky + 'px'); stickDirs = stickDir(c.kx, c.ky, stk.R * 0.62); syncTouch(); }
+function stickEnd() { stk = null; stickDirs = { u: 0, d: 0, l: 0, r: 0 }; stick.classList.remove('on'); stick.style.left = stick.style.top = stick.style.bottom = ''; knob.style.setProperty('--kx', '0px'); knob.style.setProperty('--ky', '0px'); syncTouch(); }
+zone.addEventListener('pointerdown', (e) => { e.preventDefault(); if (stk) return; unlock();
+  const r = stick.getBoundingClientRect(), R = r.width / 2; let ox = r.left + R, oy = r.top + R;
+  if (Math.hypot(e.clientX - ox, e.clientY - oy) > R) { // floating: the base jumps under the thumb (kept inside the zone)
+    const z = zone.getBoundingClientRect(); ox = Math.max(z.left + R, Math.min(z.right - R, e.clientX)); oy = Math.max(z.top + R, Math.min(z.bottom - R, e.clientY));
+    stick.style.left = ox - R - z.left + 'px'; stick.style.top = oy - R - z.top + 'px'; stick.style.bottom = 'auto'; }
+  stk = { id: e.pointerId, ox, oy, R }; roles.claim(e.pointerId, 'stick'); try { zone.setPointerCapture(e.pointerId); } catch {} stick.classList.add('on'); stickMove(e); });
 for (const b of document.querySelectorAll('#btns button')) { const k = b.dataset.k;
-  b.addEventListener('pointerdown', (e) => { unlock(); touchPad[k] = 1; touchTap[k] = 1; b.classList.add('on'); e.preventDefault(); if (k === 'lk' && G.scr !== 'fight' && G.scr !== 'select') menuKey('back'); });
-  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, () => { touchPad[k] = 0; b.classList.remove('on'); }); }
+  b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); unlock(); roles.claim(e.pointerId, k); try { b.setPointerCapture(e.pointerId); } catch {} syncTouch(); if (k === 'lk' && G.scr !== 'fight' && G.scr !== 'select') menuKey('back'); }); }
+// moves/ends are matched by pointerId on window, so a finger sliding off its control keeps (stick) or ends (button) only itself
+addEventListener('pointermove', (e) => { if (stk && e.pointerId === stk.id) stickMove(e); });
+for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, (e) => { const r = roles.release(e.pointerId); if (r === 'stick' && stk?.id === e.pointerId) stickEnd(); else if (r) syncTouch(); });
+for (const ev of ['blur', 'visibilitychange']) addEventListener(ev, () => { if (ev === 'visibilitychange' && !document.hidden) return; roles.clear(); stickEnd(); });
+window.__mbPad = () => ({ ...pads[0] });
+// right thumb: attacks on an arc around JUMP (left of it -> above it), so each is one short roll of the thumb away
+const ARC = { lp: 0, hp: 33, lk: 66, hk: 99 }, STEP = 33;
+function layoutPad() { const box = document.getElementById('btns'), J = document.getElementById('jump').offsetWidth, B = box.querySelector('[data-k=lp]').offsetWidth, R = Math.max(J / 2 + B / 2 + 12, (B + 8) / (2 * Math.sin((STEP * Math.PI) / 360))); // never overlapping, >= 8px gaps
+  for (const [k, deg] of Object.entries(ARC)) { const a = (deg * Math.PI) / 180, el = box.querySelector(`[data-k=${k}]`); el.style.right = J / 2 + R * Math.cos(a) - B / 2 + 'px'; el.style.bottom = J / 2 + R * Math.sin(a) - B / 2 + 'px'; }
+  box.style.width = J / 2 + R + B / 2 + 'px'; box.style.height = J / 2 + R + B / 2 + 'px'; }
+layoutPad(); addEventListener('resize', layoutPad); document.fonts?.ready.then(layoutPad);
 document.getElementById('pauseBtn').addEventListener('click', () => { unlock(); if (G.scr === 'fight') G.paused = !G.paused; else menuKey('back'); });
 document.getElementById('muteBtn').addEventListener('click', (e) => { unlock(); setMuted(!isMuted()); e.target.textContent = isMuted() ? '🔇' : '🔊'; });
 for (const ev of ['gesturestart', 'dblclick', 'contextmenu', 'selectstart']) document.addEventListener(ev, (e) => e.preventDefault());

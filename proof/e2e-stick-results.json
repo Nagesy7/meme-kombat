@@ -1,0 +1,197 @@
+[
+ {
+  "name": "667x375: jump button >= 72px",
+  "pass": true,
+  "extra": "78.75px"
+ },
+ {
+  "name": "667x375: stick is compact (<= 28% of the short side) and inside the bottom-left corner",
+  "pass": true,
+  "extra": "90px"
+ },
+ {
+  "name": "667x375: stick stays below the HUD (meter bars)",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "667x375: stick right alone walks forward on the ground",
+  "pass": true,
+  "extra": "{\"r\":1}"
+ },
+ {
+  "name": "667x375: stick + jump pads merge to {u,r} == keyboard W+D (same netcode bits)",
+  "pass": true,
+  "extra": "{\"u\":1,\"r\":1}"
+ },
+ {
+  "name": "667x375: fighter jumps AND moves horizontally at the same time (diagonal jump)",
+  "pass": true,
+  "extra": "air samples 13, x 216.8 -> 284.0, max y 105.5"
+ },
+ {
+  "name": "667x375: releasing jump keeps the stick held",
+  "pass": true,
+  "extra": "{\"r\":1}"
+ },
+ {
+  "name": "667x375: after landing the fighter keeps walking with the stick still held",
+  "pass": true,
+  "extra": "365.0 -> 404.0"
+ },
+ {
+  "name": "667x375: sliding off the stick keeps movement",
+  "pass": true,
+  "extra": "{\"r\":1}"
+ },
+ {
+  "name": "667x375: releasing the stick keeps jump held",
+  "pass": true,
+  "extra": "{\"u\":1}"
+ },
+ {
+  "name": "667x375: touchcancel/pointercancel releases every control",
+  "pass": true,
+  "extra": "{}"
+ },
+ {
+  "name": "667x375: no scroll or zoom",
+  "pass": true,
+  "extra": "{\"sx\":0,\"sy\":0,\"scale\":1}"
+ },
+ {
+  "name": "667x375: no page errors",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "750x342: jump button >= 72px",
+  "pass": true,
+  "extra": "72px"
+ },
+ {
+  "name": "750x342: stick is compact (<= 28% of the short side) and inside the bottom-left corner",
+  "pass": true,
+  "extra": "84px"
+ },
+ {
+  "name": "750x342: stick stays below the HUD (meter bars)",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "750x342: stick right alone walks forward on the ground",
+  "pass": true,
+  "extra": "{\"r\":1}"
+ },
+ {
+  "name": "750x342: stick + jump pads merge to {u,r} == keyboard W+D (same netcode bits)",
+  "pass": true,
+  "extra": "{\"u\":1,\"r\":1}"
+ },
+ {
+  "name": "750x342: fighter jumps AND moves horizontally at the same time (diagonal jump)",
+  "pass": true,
+  "extra": "air samples 13, x 220.0 -> 284.0, max y 105.5"
+ },
+ {
+  "name": "750x342: releasing jump keeps the stick held",
+  "pass": true,
+  "extra": "{\"r\":1}"
+ },
+ {
+  "name": "750x342: after landing the fighter keeps walking with the stick still held",
+  "pass": true,
+  "extra": "365.0 -> 404.0"
+ },
+ {
+  "name": "750x342: sliding off the stick keeps movement",
+  "pass": true,
+  "extra": "{\"r\":1}"
+ },
+ {
+  "name": "750x342: releasing the stick keeps jump held",
+  "pass": true,
+  "extra": "{\"u\":1}"
+ },
+ {
+  "name": "750x342: touchcancel/pointercancel releases every control",
+  "pass": true,
+  "extra": "{}"
+ },
+ {
+  "name": "750x342: no scroll or zoom",
+  "pass": true,
+  "extra": "{\"sx\":0,\"sy\":0,\"scale\":1}"
+ },
+ {
+  "name": "750x342: no page errors",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "844x390: jump button >= 72px",
+  "pass": true,
+  "extra": "81.890625px"
+ },
+ {
+  "name": "844x390: stick is compact (<= 28% of the short side) and inside the bottom-left corner",
+  "pass": true,
+  "extra": "93.59375px"
+ },
+ {
+  "name": "844x390: stick stays below the HUD (meter bars)",
+  "pass": true,
+  "extra": ""
+ },
+ {
+  "name": "844x390: stick right alone walks forward on the ground",
+  "pass": true,
+  "extra": "{\"r\":1}"
+ },
+ {
+  "name": "844x390: stick + jump pads merge to {u,r} == keyboard W+D (same netcode bits)",
+  "pass": true,
+  "extra": "{\"u\":1,\"r\":1}"
+ },
+ {
+  "name": "844x390: fighter jumps AND moves horizontally at the same time (diagonal jump)",
+  "pass": true,
+  "extra": "air samples 13, x 216.8 -> 284.0, max y 105.5"
+ },
+ {
+  "name": "844x390: releasing jump keeps the stick held",
+  "pass": true,
+  "extra": "{\"r\":1}"
+ },
+ {
+  "name": "844x390: after landing the fighter keeps walking with the stick still held",
+  "pass": true,
+  "extra": "365.0 -> 404.0"
+ },
+ {
+  "name": "844x390: sliding off the stick keeps movement",
+  "pass": true,
+  "extra": "{\"r\":1}"
+ },
+ {
+  "name": "844x390: releasing the stick keeps jump held",
+  "pass": true,
+  "extra": "{\"u\":1}"
+ },
+ {
+  "name": "844x390: touchcancel/pointercancel releases every control",
+  "pass": true,
+  "extra": "{}"
+ },
+ {
+  "name": "844x390: no scroll or zoom",
+  "pass": true,
+  "extra": "{\"sx\":0,\"sy\":0,\"scale\":1}"
+ },
+ {
+  "name": "844x390: no page errors",
+  "pass": true,
+  "extra": ""
+ }
+]
