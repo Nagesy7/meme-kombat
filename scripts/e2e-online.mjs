@@ -61,7 +61,7 @@ async function fight(att, def, ms = 180000, shotName) {
     if (!shot && a.phase === 'fight' && a.hp && (a.hp[0] < 1000 || a.hp[1] < 1000) && a.hp.some((h) => h < 800)) { await Promise.all([att.screenshot({ path: `proof/${shotName}-a.png` }), def.screenshot({ path: `proof/${shotName}-b.png` })]); shot = true; }
     if (a.phase === 'finish' && !att.touch) { await att.keyboard.press('KeyS'); await att.keyboard.press('KeyS'); await att.keyboard.down('KeyS'); await att.keyboard.press('KeyB'); await att.keyboard.up('KeyS'); }
     if (att.touch) { if (a.hp && Math.abs((await att.evaluate(() => window.__mb.match.f[0].x - window.__mb.match.f[1].x))) > 70) await touch(fwd, 200); await touch(hpBtn, 70); }
-    else await att.keyboard.press('KeyG');
+    else if (Math.abs(await att.evaluate(() => window.__mb.match.f[0].x - window.__mb.match.f[1].x)) < 80) await att.keyboard.press('KeyG'); // walk in first: presses are buffered (8 ticks), so mashing from range would just jab in place
     await att.waitForTimeout(140);
   }
   if (!att.touch) { await att.keyboard.up('KeyD'); await att.keyboard.up('KeyA'); }
@@ -92,6 +92,7 @@ try {
     await A.context().close(); await B.context().close(); }
   // 2) desktop ranked quick match: both wallets SIWS-signed; verified win posted server-side to the prize board
   if (run('2')) { const w1 = await siws(nacl.sign.keyPair()), w2 = await siws(nacl.sign.keyPair()); const A = await player(false, { auth: w1 }), B = await player(false, { auth: w2 });
+    const inu = async (w) => (await fetch(`${KIBBLE}/api/game?action=inu-score&wallet=${w}`)).json(), inuBefore = { [w1.addr]: await inu(w1.addr), [w2.addr]: await inu(w2.addr) };
     await goOnline(A, 1, 1); await A.waitForTimeout(600); await A.screenshot({ path: `proof/${PFX}-05-ranked-searching.png` }); await goOnline(B, 1, 4);
     await Promise.all([waitScr(A, 'fight', 40000), waitScr(B, 'fight', 40000)]);
     const [sa, sb] = await Promise.all([G(A), G(B)]); const att = sa.side === 0 ? A : B, def = att === A ? B : A;
@@ -99,6 +100,12 @@ try {
     const winnerAddr = (x.report.winner === sa.side ? w1 : w2).addr;
     const board = await (await fetch(`${KIBBLE}/api/game?action=scores&game=meme-brawl&pool=weekly`)).json();
     ok('ranked: verified PvP win posted to /api/game prize board for the winner wallet', board.entries.some((e) => e.wallet === winnerAddr), JSON.stringify(board.entries.slice(0, 3)));
+    // One Inu Score: the server-verified ranked win (never a client report) raises only the winner's lifetime meme-brawl best
+    const loserAddr = winnerAddr === w1.addr ? w2.addr : w1.addr; await new Promise((r) => setTimeout(r, 1500));
+    const inuAfter = { [w1.addr]: await inu(w1.addr), [w2.addr]: await inu(w2.addr) };
+    fs.writeFileSync(`proof/${PFX}-inu-score.json`, JSON.stringify({ kibble: KIBBLE, winner: winnerAddr, loser: loserAddr, report: x.report, post: x.post, before: inuBefore, after: inuAfter }, null, 2));
+    ok('ranked: verified win raised the winner\'s lifetime Inu Score (meme-brawl best)', (inuAfter[winnerAddr].parts?.games?.['meme-brawl']?.best || 0) > (inuBefore[winnerAddr].parts?.games?.['meme-brawl']?.best || 0) && inuAfter[winnerAddr].score > inuBefore[winnerAddr].score, `${inuBefore[winnerAddr].score} -> ${inuAfter[winnerAddr].score}`);
+    ok('ranked: loser\'s Inu Score unchanged', inuAfter[loserAddr].score === inuBefore[loserAddr].score, String(inuAfter[loserAddr].score));
     const direct = await fetch(`${KIBBLE}/api/game?action=score`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + w1.session }, body: JSON.stringify({ game: 'meme-brawl', score: 2500, durationMs: 60000 }) });
     ok('ranked: client-submitted (e.g. vs CPU) meme-brawl scores are refused', direct.status === 403, String(direct.status));
     await A.screenshot({ path: `proof/${PFX}-07-ranked-result-a.png` }); await B.screenshot({ path: `proof/${PFX}-07-ranked-result-b.png` });

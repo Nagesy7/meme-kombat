@@ -1,0 +1,332 @@
+{
+  "kibble": "https://kibble-pay.vercel.app",
+  "winner": "4xojDacJAS6W9jGo4ZxQYiTeTQPZduTKLHyqBT49Pv2K",
+  "loser": "EuJnBxkrecHJU4mXM9YzzLz5sAeJjNncBSo9GE4f4EVe",
+  "report": {
+    "winner": 0,
+    "wins": [
+      2,
+      0
+    ],
+    "hp": 1000,
+    "ticks": 1834,
+    "checksum": "dc677477"
+  },
+  "post": "Verified by both players. already final",
+  "before": {
+    "4xojDacJAS6W9jGo4ZxQYiTeTQPZduTKLHyqBT49Pv2K": {
+      "wallet": "4xojDacJAS6W9jGo4ZxQYiTeTQPZduTKLHyqBT49Pv2K",
+      "formula": 2,
+      "exists": false,
+      "score": 0,
+      "parts": {
+        "games": {
+          "kibble-chomp": {
+            "best": 0,
+            "cap": 500000,
+            "points": 0
+          },
+          "bark-invaders": {
+            "best": 0,
+            "cap": 500000,
+            "points": 0
+          },
+          "bone-breaker": {
+            "best": 0,
+            "cap": 500000,
+            "points": 0
+          },
+          "pup-crossing": {
+            "best": 0,
+            "cap": 200000,
+            "points": 0
+          },
+          "meme-brawl": {
+            "best": 0,
+            "cap": 100000,
+            "points": 0
+          },
+          "inu-empires": {
+            "best": 0,
+            "cap": 100000,
+            "points": 0
+          },
+          "pepeballz": {
+            "best": 0,
+            "cap": 100000,
+            "points": 0
+          },
+          "inu-rescue": {
+            "best": 0,
+            "cap": 2000000,
+            "points": 0
+          },
+          "inu-quest": {
+            "best": 0,
+            "cap": 50000,
+            "points": 0
+          }
+        },
+        "raids": {
+          "gutter-gator": {
+            "best": 0,
+            "max": 4800,
+            "points": 0
+          },
+          "storm-crow": {
+            "best": 0,
+            "max": 4700,
+            "points": 0
+          },
+          "iron-tomcat": {
+            "best": 0,
+            "max": 4900,
+            "points": 0
+          },
+          "fog-badger": {
+            "best": 0,
+            "max": 4800,
+            "points": 0
+          }
+        }
+      },
+      "updatedAt": null
+    },
+    "EuJnBxkrecHJU4mXM9YzzLz5sAeJjNncBSo9GE4f4EVe": {
+      "wallet": "EuJnBxkrecHJU4mXM9YzzLz5sAeJjNncBSo9GE4f4EVe",
+      "formula": 2,
+      "exists": false,
+      "score": 0,
+      "parts": {
+        "games": {
+          "kibble-chomp": {
+            "best": 0,
+            "cap": 500000,
+            "points": 0
+          },
+          "bark-invaders": {
+            "best": 0,
+            "cap": 500000,
+            "points": 0
+          },
+          "bone-breaker": {
+            "best": 0,
+            "cap": 500000,
+            "points": 0
+          },
+          "pup-crossing": {
+            "best": 0,
+            "cap": 200000,
+            "points": 0
+          },
+          "meme-brawl": {
+            "best": 0,
+            "cap": 100000,
+            "points": 0
+          },
+          "inu-empires": {
+            "best": 0,
+            "cap": 100000,
+            "points": 0
+          },
+          "pepeballz": {
+            "best": 0,
+            "cap": 100000,
+            "points": 0
+          },
+          "inu-rescue": {
+            "best": 0,
+            "cap": 2000000,
+            "points": 0
+          },
+          "inu-quest": {
+            "best": 0,
+            "cap": 50000,
+            "points": 0
+          }
+        },
+        "raids": {
+          "gutter-gator": {
+            "best": 0,
+            "max": 4800,
+            "points": 0
+          },
+          "storm-crow": {
+            "best": 0,
+            "max": 4700,
+            "points": 0
+          },
+          "iron-tomcat": {
+            "best": 0,
+            "max": 4900,
+            "points": 0
+          },
+          "fog-badger": {
+            "best": 0,
+            "max": 4800,
+            "points": 0
+          }
+        }
+      },
+      "updatedAt": null
+    }
+  },
+  "after": {
+    "4xojDacJAS6W9jGo4ZxQYiTeTQPZduTKLHyqBT49Pv2K": {
+      "wallet": "4xojDacJAS6W9jGo4ZxQYiTeTQPZduTKLHyqBT49Pv2K",
+      "formula": 2,
+      "exists": true,
+      "score": 158,
+      "parts": {
+        "games": {
+          "kibble-chomp": {
+            "best": 0,
+            "cap": 500000,
+            "points": 0
+          },
+          "bark-invaders": {
+            "best": 0,
+            "cap": 500000,
+            "points": 0
+          },
+          "bone-breaker": {
+            "best": 0,
+            "cap": 500000,
+            "points": 0
+          },
+          "pup-crossing": {
+            "best": 0,
+            "cap": 200000,
+            "points": 0
+          },
+          "meme-brawl": {
+            "best": 2500,
+            "cap": 100000,
+            "points": 158
+          },
+          "inu-empires": {
+            "best": 0,
+            "cap": 100000,
+            "points": 0
+          },
+          "pepeballz": {
+            "best": 0,
+            "cap": 100000,
+            "points": 0
+          },
+          "inu-rescue": {
+            "best": 0,
+            "cap": 2000000,
+            "points": 0
+          },
+          "inu-quest": {
+            "best": 0,
+            "cap": 50000,
+            "points": 0
+          }
+        },
+        "raids": {
+          "gutter-gator": {
+            "best": 0,
+            "max": 4800,
+            "points": 0
+          },
+          "storm-crow": {
+            "best": 0,
+            "max": 4700,
+            "points": 0
+          },
+          "iron-tomcat": {
+            "best": 0,
+            "max": 4900,
+            "points": 0
+          },
+          "fog-badger": {
+            "best": 0,
+            "max": 4800,
+            "points": 0
+          }
+        }
+      },
+      "updatedAt": 1792309576902
+    },
+    "EuJnBxkrecHJU4mXM9YzzLz5sAeJjNncBSo9GE4f4EVe": {
+      "wallet": "EuJnBxkrecHJU4mXM9YzzLz5sAeJjNncBSo9GE4f4EVe",
+      "formula": 2,
+      "exists": false,
+      "score": 0,
+      "parts": {
+        "games": {
+          "kibble-chomp": {
+            "best": 0,
+            "cap": 500000,
+            "points": 0
+          },
+          "bark-invaders": {
+            "best": 0,
+            "cap": 500000,
+            "points": 0
+          },
+          "bone-breaker": {
+            "best": 0,
+            "cap": 500000,
+            "points": 0
+          },
+          "pup-crossing": {
+            "best": 0,
+            "cap": 200000,
+            "points": 0
+          },
+          "meme-brawl": {
+            "best": 0,
+            "cap": 100000,
+            "points": 0
+          },
+          "inu-empires": {
+            "best": 0,
+            "cap": 100000,
+            "points": 0
+          },
+          "pepeballz": {
+            "best": 0,
+            "cap": 100000,
+            "points": 0
+          },
+          "inu-rescue": {
+            "best": 0,
+            "cap": 2000000,
+            "points": 0
+          },
+          "inu-quest": {
+            "best": 0,
+            "cap": 50000,
+            "points": 0
+          }
+        },
+        "raids": {
+          "gutter-gator": {
+            "best": 0,
+            "max": 4800,
+            "points": 0
+          },
+          "storm-crow": {
+            "best": 0,
+            "max": 4700,
+            "points": 0
+          },
+          "iron-tomcat": {
+            "best": 0,
+            "max": 4900,
+            "points": 0
+          },
+          "fog-badger": {
+            "best": 0,
+            "max": 4800,
+            "points": 0
+          }
+        }
+      },
+      "updatedAt": null
+    }
+  }
+}

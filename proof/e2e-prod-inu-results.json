@@ -1,0 +1,42 @@
+{
+ "at": "2026-10-18T07:46:21.974Z",
+ "url": "http://localhost:45491/",
+ "kibble": "https://kibble-pay.vercel.app",
+ "results": [
+  {
+   "name": "desktop ranked quick match: both clients finished the online match",
+   "pass": true,
+   "extra": "done/done via p2p/p2p delay 4"
+  },
+  {
+   "name": "desktop ranked quick match: no desync, identical result reports (winner, rounds, hp, ticks, checksum)",
+   "pass": true,
+   "extra": "{\"winner\":0,\"wins\":[2,0],\"hp\":1000,\"ticks\":1834,\"checksum\":\"dc677477\"}"
+  },
+  {
+   "name": "desktop ranked quick match: server verified the result (both clients agree)",
+   "pass": true,
+   "extra": "Verified by both players. already final | Verified by both players. Ranked win posted: 2500 pts on the prize board"
+  },
+  {
+   "name": "ranked: verified PvP win posted to /api/game prize board for the winner wallet",
+   "pass": false,
+   "extra": "[{\"rank\":1,\"wallet\":\"0\",\"score\":null},{\"rank\":2,\"wallet\":\"1\",\"score\":2500}]"
+  },
+  {
+   "name": "ranked: verified win raised the winner's lifetime Inu Score (meme-brawl best)",
+   "pass": true,
+   "extra": "0 -> 158"
+  },
+  {
+   "name": "ranked: loser's Inu Score unchanged",
+   "pass": true,
+   "extra": "0"
+  },
+  {
+   "name": "ranked: client-submitted (e.g. vs CPU) meme-brawl scores are refused",
+   "pass": true,
+   "extra": "403"
+  }
+ ]
+}
