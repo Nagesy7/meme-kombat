@@ -4,7 +4,8 @@ import { sprite, poseFor, SKINS } from './sprites.js';
 import { stageCanvas, stageFx } from './stages.js';
 import { unlock, sfx, music, setMuted, isMuted } from './audio.js';
 import * as K from './kibble.js';
-import { Lockstep, stateHash, resultReport } from './netcode.js';
+import { Lockstep, stateHash, resultReport, encode, decode } from './netcode.js';
+import { InputRecorder, onlineSkins, clipMatch, clipPads } from './replay.js';
 import { OnlineSession, DISCONNECT_MS } from './online.js';
 import { stickDir, clampKnob, mergePad, PointerRoles, PAD_KEYS } from './touchinput.js';
 const QS = new URLSearchParams(location.search), API = QS.get('kibble') || 'https://kibble-pay.vercel.app';
@@ -129,8 +130,8 @@ function selectStep() {
 function startFight() { if (G.mode === 'arcade') { G.p2 = G.ladder[G.li]; G.cpuLevel = 0.35 + G.li * 0.09; } go('versus'); }
 function beginMatch() {
   const o2 = { skin: G.mode === 'versus' ? G.skin[1] : 'base' }; if (G.p1 === G.p2) o2.skin = o2.skin === 'base' ? 'alt' : 'base';
-  if (G.mode === 'online') { const R = G.net.s.room; o2.skin = G.skin[1]; if (G.p1 === G.p2 && G.skin[0] === G.skin[1]) o2.skin = G.skin[0] === 'base' ? 'alt' : 'base';
-    G.match = makeMatch(G.p1, G.p2, { o1: { skin: G.skin[0] }, o2, seed: R.seed }); G.net.ls = new Lockstep({ me: G.net.s.side, delay: G.net.s.delay }); G.net.stall = 0; }
+  if (G.mode === 'online') { const R = G.net.s.room; o2.skin = onlineSkins(G.p1, G.p2, G.skin[0], G.skin[1])[1];
+    G.match = makeMatch(G.p1, G.p2, { o1: { skin: G.skin[0] }, o2, seed: R.seed }); G.net.ls = new Lockstep({ me: G.net.s.side, delay: G.net.s.delay }); G.net.stall = 0; G.net.rec = new InputRecorder(); }
   else G.match = makeMatch(G.p1, G.p2, { o1: { skin: G.skin[0] }, o2, seed: Date.now() & 0xffff }); G.matchStart = Date.now(); G.fx = []; go('fight'); music(G.match.stage);
 }
 function matchOver() {
@@ -356,6 +357,7 @@ function updateMenus(scr) {
 }
 function updateFight() {
   if (G.mode === 'online') return updateOnline();
+  if (G.mode === 'replay') return updateReplay();
   if (G.scr === 'fight' && !G.paused) {
     const m = G.match, i0 = pads[0], i1 = G.mode === 'versus' ? pads[1] : cpuInput(m, 1, G.cpuLevel); step(m, [i0, i1]);
     for (const ev of m.events) spawnFx(ev); m.events.length = 0;
@@ -380,22 +382,37 @@ async function startOnline() {
   } catch (e) { G.lobbyMsg = 'Error: ' + e.message; G.net = null; }
 }
 function onlineReady(s) { const P = s.room.players; G.p1 = P[0].char; G.p2 = P[1].char; G.skin = [P[0].skin, P[1].skin]; G.vsT = 0; go('versus'); }
+// ?clip=CODE: watch a verified clip (public /api/clips). Simulate silently to the highlight, then play it in real time.
+async function startClip(id) {
+  try { const r = await fetch(`${API}/api/pvp?action=clip&id=${encodeURIComponent(id)}`).then((x) => x.json()); if (!r.ok) throw new Error(r.reason || 'clip not found');
+    const c = r.clip, m = clipMatch(c, makeMatch), pads = clipPads(c);
+    for (let t = 0; t < c.highlight.from; t++) { const v = pads.next(); if (v.done) break; step(m, [decode(v.value[0]), decode(v.value[1])]); m.events.length = 0; }
+    G.clip = { c, pads }; G.mode = 'replay'; G.match = m; G.p1 = c.players[0].char; G.p2 = c.players[1].char; G.fx = []; go('fight'); music(m.stage);
+  } catch (e) { G.msg = 'Clip: ' + e.message; }
+}
+function updateReplay() {
+  const m = G.match, C = G.clip; if (!C || G.paused) return;
+  if (m.phase !== 'matchEnd') { const v = C.pads.next(); step(m, v.done ? [{}, {}] : [decode(v.value[0]), decode(v.value[1])]); }
+  else step(m, [{}, {}]);
+  for (const ev of m.events) spawnFx(ev); m.events.length = 0;
+  if (m.phase === 'matchEnd' && m.pt > 170) { G.clip = null; G.mode = 'arcade'; go('menu'); }
+}
 function updateOnline() {
   const N = G.net, m = G.match, ls = N?.ls; if (!ls) return;
   for (const msg of N.s.drain()) ls.receive(msg);
   if (m.phase === 'matchEnd') { step(m, [{}, {}]); for (const ev of m.events) spawnFx(ev); m.events.length = 0; if (m.pt > 170) onlineEnd('done'); return; }
   if (ls.desync) return onlineEnd('desync');
   const pkt = ls.pushLocal(pads[0]); if (pkt) N.s.send(pkt);
-  let n = 0; while (ls.ready() && n < 3) { step(m, ls.take()); n++; for (const ev of m.events) spawnFx(ev); m.events.length = 0; const ck = ls.checkpoint(stateHash(m)); if (ck) N.s.send(ck);
-    if (m.phase === 'matchEnd') { music('win'); N.report = resultReport(m); N.post = 'Verifying result with the server...'; N.s.report(N.report).then((r) => onlinePosted(r)).catch((e) => { N.post = 'Result not verified: ' + e.message; }); break; } }
+  let n = 0; while (ls.ready() && n < 3) { const t = ls.tick, inp = ls.take(); N.rec?.add(t, encode(inp[0]), encode(inp[1])); step(m, inp); n++; for (const ev of m.events) spawnFx(ev); m.events.length = 0; const ck = ls.checkpoint(stateHash(m)); if (ck) N.s.send(ck);
+    if (m.phase === 'matchEnd') { music('win'); N.report = resultReport(m); N.post = 'Verifying result with the server...'; N.s.report({ ...N.report, replay: N.rec ? { inputs: N.rec.inputs } : undefined }).then((r) => onlinePosted(r)).catch((e) => { N.post = 'Result not verified: ' + e.message; }); break; } }
   N.stall = n ? 0 : N.stall + 1;
   if (!n && (N.s.peerGone || N.s.silentFor() > DISCONNECT_MS)) onlineEnd('forfeit');
 }
 async function onlinePosted(r) { const N = G.net; if (!N) return;
-  const say = (x) => { N.post = x.status === 'verified' ? (x.recorded ? `Verified by both players. Ranked win posted: ${x.score} pts on the prize board` : `Verified by both players. ${x.reason || ''}`) : x.status === 'disputed' ? 'Reports differ: result NOT recorded' : (x.reason || 'Result pending'); };
+  const say = (x) => { N.post = x.status === 'verified' ? (x.bracket ? `Verified by both players. Bracket result sent${x.clip ? ' + clip saved' : ''}` : x.recorded ? `Verified by both players. Ranked win posted: ${x.score} pts on the prize board` : `Verified by both players. ${x.reason || ''}`) : x.status === 'disputed' ? 'Reports differ: result NOT recorded' : (x.reason || 'Result pending'); };
   say(r); if (r.status !== 'pending') return;
   for (let i = 0; i < 15 && G.net === N; i++) { await new Promise((z) => setTimeout(z, 1000)); const q = await fetch(`${API}/api/pvp?action=room&code=${N.s.code}`).then((x) => x.json()).catch(() => null);
-    const st = q?.room?.status; if (st === 'verified') { N.post = `Verified by both players.${N.s.room.ranked ? (N.report.winner === N.s.side ? ' Ranked win posted by the server.' : ' Ranked loss.') : ' Casual match: no prizes.'}`; return; } if (st === 'disputed') { N.post = 'Reports differ: result NOT recorded'; return; } }
+    const st = q?.room?.status; if (st === 'verified') { N.post = `Verified by both players.${N.s.room.pair ? (N.report.winner === N.s.side ? ' Bracket win sent to the bracket.' : ' Bracket loss.') : N.s.room.ranked ? (N.report.winner === N.s.side ? ' Ranked win posted by the server.' : ' Ranked loss.') : ' Casual match: no prizes.'}`; return; } if (st === 'disputed') { N.post = 'Reports differ: result NOT recorded'; return; } }
 }
 function onlineEnd(why) { const N = G.net; if (!N || N.ended) return; N.ended = why; N.s.leave(); go('onlineres'); }
 function drawOnline() {
@@ -406,7 +423,8 @@ function drawOnline() {
 }
 function drawLobby() {
   ctx.drawImage(stageCanvas('pond'), 0, 0); ctx.fillStyle = 'rgba(6,4,20,.72)'; ctx.fillRect(0, 0, W, H);
-  const s = G.net?.s; text(G.onKind === 'quick' ? (G.onRanked ? 'RANKED QUICK MATCH' : 'QUICK MATCH') : G.onKind === 'join' ? 'JOINING ROOM' : 'PRIVATE ROOM', 320, 34, 16, '#ffd25a');
+  const s = G.net?.s; text(s?.room?.pair ? 'BRACKET MATCH' : G.onKind === 'quick' ? (G.onRanked ? 'RANKED QUICK MATCH' : 'QUICK MATCH') : G.onKind === 'join' ? 'JOINING ROOM' : 'PRIVATE ROOM', 320, 34, 16, '#ffd25a');
+  if (s?.room?.pair) text(`ROUND ${s.room.pair.ctx?.round ?? '?'}  ·  FREE ENTRY  ·  VERIFIED RANKED 1V1`, 320, 56, 7, '#3fb6a8', 'center', SMALL, null);
   drawSprite(byId(G.p1), Math.floor(G.t / 24) % 2 ? 'idle' : 'idle2', G.owned[G.skinIdx[0]] || 'base', 120, 320, 2.4, 1);
   if (s?.code && G.onKind !== 'quick') { panel(220, 90, 200, 60, '#121a36'); text('ROOM CODE', 320, 104, 8, '#9ab0d4'); text(s.code, 320, 130, 22, '#fff6e0');
     text(s.link, 320, 170, 6, '#3fb6a8', 'center', SMALL, null); panel(250, 186, 140, 24, '#3a2060', '#ffd25a'); text('COPY LINK', 320, 198, 8, '#ffd25a'); btn(250, 186, 140, 24, () => { navigator.clipboard?.writeText(s.link).then(() => (G.lobbyMsg = 'Link copied!')).catch(() => {}); }); }
@@ -432,6 +450,7 @@ function render() {
       if (m.phase === 'finisher' || m.phase === 'finish') { ctx.fillStyle = `rgba(20,0,10,${Math.min(0.5, m.pt / 60)})`; ctx.fillRect(0, 0, W, H); }
       const order = [...m.f].sort((a, b) => (a.st === 'attack' ? 1 : 0) - (b.st === 'attack' ? 1 : 0)); for (const f of order) fighterDraw(f, m);
       for (const p of m.proj) drawProj(p, m.tick); if (m.finisher) finisherOverlay(m); drawFx(); hud(m);
+      if (G.mode === 'replay' && G.clip) { const c = G.clip.c; text('CLIP REPLAY · VERIFIED' + (c.bracket ? ' BRACKET' : ' RANKED') + ' 1V1', 320, 342, 6, '#ffd25a', 'center', SMALL, null); text(c.players[0].short || '', 60, 58, 6, '#9ab0d4', 'left', SMALL, null); text(c.players[1].short || '', 580, 58, 6, '#9ab0d4', 'right', SMALL, null); }
       if (G.mode === 'online' && G.net) { const N = G.net; text(N.s.side ? 'YOU' : 'YOU', N.s.side ? 580 : 60, 58, 7, '#3ec46a', N.s.side ? 'right' : 'left'); text(`${N.s.via === 'p2p' ? 'P2P' : 'RELAY'} D${N.s.delay}`, 320, 46, 6, '#9ab0d4', 'center', SMALL, null);
         if (N.stall > 30) { ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(0, 130, W, 60); text('WAITING FOR OPPONENT...', 320, 150, 12, '#ffd25a'); text(`forfeit in ${Math.max(0, Math.ceil((DISCONNECT_MS - N.s.silentFor()) / 1000))}s if they don't return`, 320, 172, 7, '#fff6e0', 'center', SMALL, null); } }
       if (G.paused) { ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, W, H); text('PAUSED', 320, 150, 24, '#ffd25a'); text('P / pause to resume   Esc / back to quit', 320, 190, 8, '#fff6e0'); btn(0, 0, W, H, () => (G.paused = false)); }
@@ -446,7 +465,7 @@ function frame(now) { acc += snapMs(Math.min(100, now - last)); last = now; let 
   (window.__stepHist ||= {})[n] = (window.__stepHist[n] || 0) + 1; /* jitter probe */ render(); dimControls(); syncVaultLink(); requestAnimationFrame(frame); }
 document.fonts?.load(`16px ${FONT}`).finally(() => requestAnimationFrame(frame));
 if (!document.fonts) requestAnimationFrame(frame);
-const kp = new URLSearchParams(location.search).get('kibble'); if (QS.get('room')) { G.joinCode = QS.get('room').toUpperCase(); G.onKind = 'join'; G.onRanked = false; G.mode = 'online'; G.scr = 'select'; }
+const kp = new URLSearchParams(location.search).get('kibble'); if (QS.get('clip')) startClip(QS.get('clip')); else if (QS.get('room')) { G.joinCode = QS.get('room').toUpperCase(); G.onKind = 'join'; G.onRanked = false; G.mode = 'online'; G.scr = 'select'; }
 addEventListener('mb:wallet', () => refreshOwned().catch(() => {}));
 if (!K.DEMO) K.initKibble(kp || undefined).catch((e) => console.warn('kibble-pay unavailable', e));
 // fit canvas

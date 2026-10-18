@@ -27,7 +27,7 @@ export class OnlineSession {
     else r = await this.req('quick', base);
     if (!r.ok) return this.set('error', r.reason || 'matchmaking failed');
     Object.assign(this, { code: r.code, side: r.side, tok: r.tok, room: r.room });
-    if (r.waiting || (r.room && !r.room.players[1])) { this.set('waiting', this.kind === 'create' ? 'Share the code or link with your friend' : 'Searching for an opponent...'); await this.waitForPeer(); }
+    if (r.waiting || (r.room && !r.room.players[1])) { this.set('waiting', r.room?.pair ? 'Bracket match: waiting for your opponent to join' : this.kind === 'create' ? 'Share the code or link with your friend' : 'Searching for an opponent...'); await this.waitForPeer(); }
     if (this.closed || this.state === 'error') return;
     this.set('connecting', 'Opponent found! Connecting...');
     this.pollLoop();
