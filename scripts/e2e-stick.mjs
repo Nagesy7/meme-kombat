@@ -57,6 +57,11 @@ for (const [w, h] of sizes) {
   pts.set(1, { x: sc.x + S.width * 0.45, y: sc.y }); await send('touchStart'); await pg.waitForTimeout(40);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }); pts.clear(); await pg.waitForTimeout(60);
   ok(`${V}: touchcancel/pointercancel releases every control`, JSON.stringify((await st()).pad) === '{}', JSON.stringify((await st()).pad));
+  // opponent at the right wall: overlapped controls fade (visual only), JUMP keeps its size and still registers
+  await pg.evaluate(() => { const m = window.__mb.match; m.f[0].x = 330; m.f[1].x = 612; m.f[1].y = 0; }); await pg.waitForTimeout(150);
+  const dim = await pg.evaluate(() => [...document.querySelectorAll('#btns button.under')].map((e) => e.dataset.k)), J2 = await box('#jump');
+  pts.set(3, C(J2)); await send('touchStart'); await pg.waitForTimeout(40); const pj = (await st()).pad; await end(3);
+  ok(`${V}: opponent at the right wall: overlapped controls fade, JUMP still ${Math.round(J2.width)}px and works`, dim.length > 0 && J2.width >= 72 && pj.u === 1, `dimmed [${dim}] pad ${JSON.stringify(pj)}`);
   const v = await pg.evaluate(() => ({ sx: scrollX, sy: scrollY, scale: visualViewport.scale }));
   ok(`${V}: no scroll or zoom`, v.sx === 0 && v.sy === 0 && v.scale === 1, JSON.stringify(v));
   ok(`${V}: no page errors`, !errs.length, errs.join(' | '));

@@ -70,6 +70,12 @@ function layoutPad() { const box = document.getElementById('btns'), J = document
   for (const [k, deg] of Object.entries(ARC)) { const a = (deg * Math.PI) / 180, el = box.querySelector(`[data-k=${k}]`); el.style.right = J / 2 + R * Math.cos(a) - B / 2 + 'px'; el.style.bottom = J / 2 + R * Math.sin(a) - B / 2 + 'px'; }
   box.style.width = J / 2 + R + B / 2 + 'px'; box.style.height = J / 2 + R + B / 2 + 'px'; }
 layoutPad(); addEventListener('resize', layoutPad); document.fonts?.ready.then(layoutPad);
+// Controls fade (28% opacity) while a fighter stands behind them (e.g. an opponent at the right wall), so they never hide
+// the action. Visual only: hit areas, sizes and positions don't change, so every control stays where the thumb expects it.
+const CTRLS = [stick, ...document.querySelectorAll('#btns button')];
+function dimControls() { const on = G.scr === 'fight' && TOUCH() && G.match, r = on ? cv.getBoundingClientRect() : null, s = on ? r.width / W : 0;
+  const boxes = on ? G.match.f.map((f) => ({ x0: r.left + (f.x - 30) * s, x1: r.left + (f.x + 30) * s, y1: r.top + (GY - f.y) * s, y0: r.top + (GY - f.y - 116) * s })) : [];
+  for (const el of CTRLS) { const b = el.getBoundingClientRect(), hit = boxes.some((f) => b.left < f.x1 && b.right > f.x0 && b.top < f.y1 && b.bottom > f.y0); if (el.classList.contains('under') !== hit) el.classList.toggle('under', hit); } }
 document.getElementById('pauseBtn').addEventListener('click', () => { unlock(); if (G.scr === 'fight') G.paused = !G.paused; else menuKey('back'); });
 document.getElementById('muteBtn').addEventListener('click', (e) => { unlock(); setMuted(!isMuted()); e.target.textContent = isMuted() ? '🔇' : '🔊'; });
 for (const ev of ['gesturestart', 'dblclick', 'contextmenu', 'selectstart']) document.addEventListener(ev, (e) => e.preventDefault());
@@ -432,7 +438,7 @@ let acc = 0, last = performance.now();
 // vsync snap: rAF timestamps wobble +-1-2ms; a raw 16.67ms accumulator ran 0 or 2 updates on many frames (stutter). Snap to whole 60Hz frames.
 export function snapMs(ms) { const k = Math.round(ms / (1000 / 60)); return k >= 1 && Math.abs(ms - k * 1000 / 60) < 2 ? k * 1000 / 60 : ms; }
 function frame(now) { acc += snapMs(Math.min(100, now - last)); last = now; let n = 0; while (acc >= 1000 / 60 - 1e-3 && n < 5) { update(); acc = Math.max(0, acc - 1000 / 60); n++; if (G.shake > 0) { G.shake *= 0.85; if (G.shake < 0.5) G.shake = 0; } }
-  (window.__stepHist ||= {})[n] = (window.__stepHist[n] || 0) + 1; /* jitter probe */ render(); requestAnimationFrame(frame); }
+  (window.__stepHist ||= {})[n] = (window.__stepHist[n] || 0) + 1; /* jitter probe */ render(); dimControls(); requestAnimationFrame(frame); }
 document.fonts?.load(`16px ${FONT}`).finally(() => requestAnimationFrame(frame));
 if (!document.fonts) requestAnimationFrame(frame);
 const kp = new URLSearchParams(location.search).get('kibble'); if (QS.get('room')) { G.joinCode = QS.get('room').toUpperCase(); G.onKind = 'join'; G.onRanked = false; G.mode = 'online'; G.scr = 'select'; }
