@@ -4,20 +4,8 @@ import { byId } from './roster.js';
 export const W = 640, LEFT = 28, RIGHT = 612, GRAV = 0.55, ROUND_FRAMES = 99 * 60, MAX_HP = 1000;
 const STAND_H = 108, CROUCH_H = 68, HALF_W = 18;
 
-// startup/active/recovery frames, hitbox [x0,x1] forward of centre, [y0,y1] above ground
-export const NORMALS = {
-  lp: { s: 3, a: 3, r: 7, dmg: 40, hs: 14, bs: 9, kb: 3, x: [8, 58], y: [72, 100], lvl: 'high', pose: 'jab' },
-  hp: { s: 6, a: 4, r: 14, dmg: 80, hs: 20, bs: 13, kb: 5, x: [8, 66], y: [70, 104], lvl: 'high', pose: 'hook' },
-  lk: { s: 5, a: 4, r: 10, dmg: 50, hs: 16, bs: 10, kb: 4, x: [8, 66], y: [34, 66], lvl: 'mid', pose: 'kick' },
-  hk: { s: 8, a: 5, r: 17, dmg: 90, hs: 22, bs: 14, kb: 6, x: [8, 78], y: [62, 104], lvl: 'high', pose: 'hkick' },
-  clp: { s: 3, a: 3, r: 7, dmg: 35, hs: 13, bs: 8, kb: 3, x: [8, 56], y: [30, 60], lvl: 'mid', pose: 'cjab' },
-  chp: { s: 6, a: 5, r: 16, dmg: 85, hs: 24, bs: 14, kb: 2, x: [4, 52], y: [40, 112], lvl: 'mid', pose: 'upper', launch: 9.5 },
-  clk: { s: 4, a: 4, r: 9, dmg: 40, hs: 14, bs: 9, kb: 3, x: [8, 66], y: [0, 24], lvl: 'low', pose: 'ckick' },
-  chk: { s: 7, a: 5, r: 18, dmg: 80, hs: 0, bs: 14, kb: 3, x: [8, 80], y: [0, 22], lvl: 'low', pose: 'sweep', trip: true },
-  jp: { s: 4, a: 8, r: 4, dmg: 65, hs: 18, bs: 11, kb: 3, x: [0, 56], y: [-10, 50], lvl: 'over', pose: 'jpunch', air: true },
-  jk: { s: 5, a: 10, r: 4, dmg: 80, hs: 20, bs: 12, kb: 4, x: [0, 66], y: [-20, 40], lvl: 'over', pose: 'jkick', air: true },
-};
-export const THROW = { dmg: 120, range: 62 };
+import { NORMALS, THROW, RULES, MOTIONS, SPECIAL_ORDER, CANCEL_BASE, CANCEL_WIN, kitFor, specialMove as buildSpecial, chainMove, chainName, comboScale } from './moves.js';
+export { NORMALS, THROW, RULES };
 
 export function makeRng(seed = 1) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
 
@@ -29,7 +17,7 @@ export function makeFighter(id, side, opts = {}) {
 }
 
 export function makeMatch(p1, p2, opts = {}) {
-  const m = { f: [makeFighter(p1, 0, opts.o1), makeFighter(p2, 1, opts.o2)], round: 1, wins: [0, 0], timer: ROUND_FRAMES, phase: 'intro', pt: 0,
+  const m = { rules: opts.rules ?? RULES, f: [makeFighter(p1, 0, opts.o1), makeFighter(p2, 1, opts.o2)], round: 1, wins: [0, 0], timer: ROUND_FRAMES, phase: 'intro', pt: 0,
     proj: [], events: [], banner: null, rng: makeRng(opts.seed || 7), tick: 0, winner: null, matchWinner: null, finisher: null, hitstop: 0, stage: opts.stage || byId(p2).stage, opts };
   say(m, 'ROUND 1', 70);
   return m;
@@ -44,6 +32,13 @@ function motion(buf, seq, win, now) {
   for (let k = buf.length - 1; k >= 0 && i >= 0; k--) { if (now - buf[k].t > win) break; if (buf[k].d === seq[i]) i--; }
   return i < 0;
 }
+// rules 2: same scan, but letting the stick go to neutral between two steps of the roll breaks it (see moves.js MOTIONS)
+function motion2(buf, M, now) {
+  if (M.dd) return ddMotion(buf, now);
+  const seq = M.seq; let i = seq.length - 1;
+  for (let k = buf.length - 1; k >= 0 && i >= 0; k--) { if (now - buf[k].t > M.win) break; const d = buf[k].d; if (d === seq[i]) i--; else if (M.noNeutral && d === 5 && i < seq.length - 1) return false; }
+  return i < 0;
+}
 function ddMotion(buf, now) { // down, not-down, down
   let st = 0;
   for (let k = buf.length - 1; k >= 0; k--) { const b = buf[k]; if (now - b.t > 22) break; const dn = b.d === 2 || b.d === 1 || b.d === 3;
@@ -55,18 +50,38 @@ const neutral = (f) => f.st === 'idle' || f.st === 'walk' || f.st === 'crouch' |
 
 function startMove(m, f, mv, name) { consume(f); if (mv.special) f.specialsUsed = (f.specialsUsed || 0) + 1; f.st = 'attack'; f.t = 0; f.move = { ...mv, name }; f.hitDone = false; m.events.push({ type: 'whiff', who: f.side, mv: name }); }
 
-function specialMove(f, kind) {
-  const S = f.ch.specials, pw = f.ch.pow || 1;
-  if (kind === 'proj') return { s: 12, a: 1, r: 22, proj: true, dmg: Math.round(S.proj.dmg * pw), pose: 'special', special: S.proj.name, x: [0, 0], y: [0, 0] };
-  if (kind === 'rush') return { s: 8, a: 14, r: 18, dmg: Math.round(S.rush.dmg * pw), hs: 22, bs: 16, kb: 8, x: [0, 60], y: [20, 100], lvl: 'mid', pose: 'rush', dash: 7.5 * (f.ch.spd || 1), special: S.rush.name, chip: true };
-  if (kind === 'rise') return { s: 3, a: 12, r: 24, dmg: Math.round(S.rise.dmg * pw), hs: 26, bs: 18, kb: 3, x: [0, 54], y: [30, 150], lvl: 'mid', pose: 'rise', rise: 11, launch: 11, special: S.rise.name, chip: true, invS: 6 };
-  if (kind === 'super') return { s: 10, a: 22, r: 26, dmg: Math.round(S.super.dmg * pw), hs: 40, bs: 24, kb: 10, x: [-10, 120], y: [0, 140], lvl: 'mid', pose: 'super', dash: 6, special: S.super.name, chip: true, launch: 12, super: true, invS: 12 };
-}
+const specialMove = (f, kind) => buildSpecial(f.ch, kind);
 
 // Button presses are buffered for BUFFER ticks (also through hitstop) so a tap during
 // recovery/hitstop still comes out on the first actionable frame. Consumed when a move starts.
 export const BUFFER = 8;
-function latch(m, f, inp) { f.pq = f.pq || {}; for (const k of ['lp', 'hp', 'lk', 'hk']) if (inp[k] && !f.prev[k]) f.pq[k] = m.tick; f.prev = { ...inp }; }
+function latch(m, f, inp) { f.pq = f.pq || {}; for (const k of ['lp', 'hp', 'lk', 'hk']) if (inp[k] && !f.prev[k]) f.pq[k] = m.tick; f.prev = { ...inp };
+  if (m.rules >= 2 && m.hitstop > 0) pushDir(m, f, relDir(inp, f.face)); } // rules 2: stick rolls made during hitstop still count (cancels)
+function pushDir(m, f, d) { if (d !== f.lastDir) { f.buf.push({ d, t: m.tick }); if (f.buf.length > 24) f.buf.shift(); f.lastDir = d; } }
+// rules 2 specials: SPECIAL_ORDER from moves.js, first match wins
+function trySpecial(m, f, pr) {
+  const anyP = pr.lp || pr.hp, anyK = pr.lk || pr.hk;
+  for (const sp of SPECIAL_ORDER) {
+    if (!(sp.btn === 'P' ? anyP : anyK)) continue;
+    const M = MOTIONS[sp.motion];
+    if ((sp.meter && f.meter < sp.meter) || (M.stand && f.crouchHeld) || (sp.oneProj && m.proj.some((p) => p.owner === f.side)) || !motion2(f.buf, M, m.tick)) continue;
+    if (sp.slot === 'super') { f.meter = 0; m.events.push({ type: 'super', who: f.side }); say(m, f.ch.specials.super.name.toUpperCase(), 50, 'SUPER'); m.hitstop = 24; }
+    f.chainSeq = null; startMove(m, f, specialMove(f, sp.slot), sp.slot); return true;
+  }
+  return false;
+}
+// rules 2: can the current move be cancelled / continued right now?
+function canCancel(f) {
+  const mv = f.move; if (!mv || mv.special || mv.air || !f.hitDone || f.y > 0 || f.t > mv.s + mv.a + CANCEL_WIN) return false;
+  return mv.chain != null || CANCEL_BASE.includes(mv.name) || kitFor(f.ch).hc.includes(mv.name);
+}
+function tryChain(m, f, pr) {
+  const seq = f.chainSeq; if (!seq) return false; const K = kitFor(f.ch);
+  for (const k of ['lp', 'hp', 'lk', 'hk']) { if (!pr[k]) continue;
+    const ci = K.chains.findIndex((c) => c.seq.length > seq.length && seq.every((b, i) => c.seq[i] === b) && c.seq[seq.length] === k);
+    if (ci < 0) continue; const i = seq.length; f.chainSeq = [...seq, k]; startMove(m, f, chainMove(f.ch, ci, i), chainName(ci, i)); return true; }
+  return false;
+}
 const consume = (f) => { f.pq = {}; };
 // Read input and start actions. inp: {u,d,l,r,lp,hp,lk,hk} held booleans.
 function control(m, f, o, inp) {
@@ -74,23 +89,26 @@ function control(m, f, o, inp) {
   // face the opponent when grounded and neutral
   if (f.y === 0 && neutral(f)) f.face = o.x >= f.x ? 1 : -1;
   const d = relDir(inp, f.face);
-  if (d !== f.lastDir) { f.buf.push({ d, t: m.tick }); if (f.buf.length > 24) f.buf.shift(); f.lastDir = d; }
+  pushDir(m, f, d);
   f.holdBack = d === 4 || d === 1 || d === 7; f.crouchHeld = d === 1 || d === 2 || d === 3;
   const anyP = pr.lp || pr.hp, anyK = pr.lk || pr.hk;
   if (f.st === 'jump' && !f.move && (anyP || anyK)) { consume(f); f.move = { ...(anyK ? NORMALS.jk : NORMALS.jp), name: anyK ? 'jk' : 'jp' }; f.mt = 0; f.hitDone = false; m.events.push({ type: 'whiff', who: f.side }); return; }
+  if (m.rules >= 2 && f.st === 'attack' && canCancel(f)) { if (trySpecial(m, f, pr)) return; tryChain(m, f, pr); return; }
   if (!neutral(f)) return;
   if (f.y > 0) return;
-  // specials (priority: super > rise > rush > proj)
+  if (m.rules >= 2) { if (trySpecial(m, f, pr)) return; } else {
+  // rules 1 specials (priority: super > rise > rush > proj)
   if ((pr.lk || pr.hk) && f.meter >= 100 && motion(f.buf, [2, 3, 6], 24, m.tick)) { f.meter = 0; m.events.push({ type: 'super', who: f.side }); say(m, f.ch.specials.super.name.toUpperCase(), 50, 'SUPER'); m.hitstop = 24; return startMove(m, f, specialMove(f, 'super'), 'super'); }
   if (anyP && ddMotion(f.buf, m.tick)) return startMove(m, f, specialMove(f, 'rise'), 'rise');
   if (anyK && motion(f.buf, [4, 6], 16, m.tick) && !f.crouchHeld) return startMove(m, f, specialMove(f, 'rush'), 'rush');
   if (anyP && motion(f.buf, [2, 3, 6], 20, m.tick) && !m.proj.some((p) => p.owner === f.side)) return startMove(m, f, specialMove(f, 'proj'), 'proj');
+  }
   // throw: forward + HP close
   if (pr.hp && (d === 6) && Math.abs(o.x - f.x) < THROW.range && o.y === 0 && neutral(o) && o.st !== 'down' && o.inv <= 0) {
     consume(f); f.st = 'throw'; f.t = 0; o.st = 'thrown'; o.t = 0; o.vx = 0; m.events.push({ type: 'throw', who: f.side }); return;
   }
   const c = f.crouchHeld;
-  for (const k of ['hp', 'hk', 'lp', 'lk']) if (pr[k]) return startMove(m, f, NORMALS[c ? 'c' + k : k], c ? 'c' + k : k);
+  for (const k of ['hp', 'hk', 'lp', 'lk']) if (pr[k]) { f.chainSeq = c ? null : [k]; return startMove(m, f, NORMALS[c ? 'c' + k : k], c ? 'c' + k : k); }
   const spd = 2.6 * (f.ch.spd || 1);
   if (d >= 7) { f.st = 'jump'; f.t = 0; f.vy = 10.5; f.vx = d === 9 ? 3.2 * f.face : d === 7 ? -3.2 * f.face : 0; f.move = null; m.events.push({ type: 'jump', who: f.side }); return; }
   const oppAttacking = o.st === 'attack' || m.proj.some((p) => p.owner === o.side);
@@ -99,7 +117,7 @@ function control(m, f, o, inp) {
   if (d === 6) { f.st = 'walk'; f.vx = spd * f.face; } else if (d === 4) { f.st = 'walk'; f.vx = -spd * 0.85 * f.face; } else { f.st = 'idle'; f.vx = 0; }
 }
 
-function hurt(f) { const h = f.st === 'crouch' || f.st === 'cblock' || (f.st === 'attack' && f.move?.name?.[0] === 'c' && f.move.name !== 'chp') ? CROUCH_H : STAND_H; return { x0: f.x - HALF_W, x1: f.x + HALF_W, y0: f.y, y1: f.y + h }; }
+function hurt(f) { const h = f.st === 'crouch' || f.st === 'cblock' || (f.st === 'attack' && ((f.move?.name?.[0] === 'c' && f.move.name !== 'chp') || f.move?.lowHurt)) ? CROUCH_H : STAND_H; return { x0: f.x - HALF_W, x1: f.x + HALF_W, y0: f.y, y1: f.y + h }; }
 function hitbox(f, mv) { const a = f.x + mv.x[0] * f.face, b = f.x + mv.x[1] * f.face; return { x0: Math.min(a, b), x1: Math.max(a, b), y0: f.y + mv.y[0], y1: f.y + mv.y[1] }; }
 const overlap = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
 
@@ -119,15 +137,15 @@ export function applyHit(m, att, def, mv) {
     def.hp = Math.max(chip >= def.hp ? 1 : 0, def.hp - chip);
     def.st = 'blockstun'; def.t = 0; def.stun = mv.bs || 12; def.vx = -(mv.kb || 4) * 0.9 * att.face * -1 * -1; def.vx = (mv.kb || 4) * att.face;
     att.meter = Math.min(100, att.meter + mv.dmg / 25); def.meter = Math.min(100, def.meter + mv.dmg / 30);
-    m.events.push({ type: 'block', who: def.side, x: (att.x + def.x) / 2, y: def.y + 80 }); m.hitstop = 4; return 'block';
+    m.events.push({ type: 'block', who: def.side, x: (att.x + def.x) / 2, y: def.y + 80, mv: mv.name }); m.hitstop = 4; return 'block';
   }
   const inCombo = def.st === 'hitstun' || def.st === 'air';
   att.combo = inCombo ? att.combo + 1 : 1;
-  const scale = Math.max(0.35, 1 - (att.combo - 1) * 0.12);
+  const scale = comboScale(att.combo);
   const dmg = Math.max(1, Math.round(mv.dmg * scale));
   def.hp = Math.max(0, def.hp - dmg); def.hitFlash = 8;
   att.meter = Math.min(100, att.meter + mv.dmg / 10); def.meter = Math.min(100, def.meter + mv.dmg / 20);
-  m.events.push({ type: 'hit', who: def.side, dmg, heavy: mv.dmg >= 80, x: (att.x + def.x) / 2 + def.face * -10, y: def.y + (mv.y[0] + mv.y[1]) / 2, combo: att.combo });
+  m.events.push({ type: 'hit', who: def.side, dmg, heavy: mv.dmg >= 80, x: (att.x + def.x) / 2 + def.face * -10, y: def.y + (mv.y[0] + mv.y[1]) / 2, combo: att.combo, mv: mv.name });
   m.hitstop = mv.dmg >= 80 ? 8 : 5;
   if (att.combo >= 3 && (att.combo === 3 || att.combo % 2 === 1)) say(m, `${att.combo} HIT COMBO`, 40);
   if (def.y > 0 || def.st === 'air' || mv.launch || def.hp <= 0) {
@@ -146,6 +164,8 @@ function stepFighter(m, f, o) {
       const T = f.t;
       if (mv.dash && T > mv.s && T <= mv.s + mv.a) f.vx = mv.dash * f.face; else if (!mv.dash) f.vx *= 0.6; else f.vx *= 0.7;
       if (mv.rise && T === mv.s) { f.vy = mv.rise; f.y = 1; f.vx = 1.2 * f.face; }
+      if (mv.hop && T === 2) { f.vy = mv.hop; f.y = 1; f.vx = 2.2 * f.face; } // rules-2 overhead hop
+      if (mv.adv && T === 1) f.vx = mv.adv * f.face; // rules-2 string step: small step in
       if (mv.proj && T === mv.s) { const S = f.ch.specials.proj; m.proj.push({ owner: f.side, x: f.x + 40 * f.face, y: 70, vx: S.speed * f.face, dmg: mv.dmg, kind: S.kind, color: S.color, life: 160, w: 22, h: 22, name: S.name }); m.events.push({ type: 'proj', who: f.side }); }
       if (!mv.proj && T > mv.s && T <= mv.s + mv.a && !f.hitDone) { if (overlap(hitbox(f, mv), hurt(o))) { const r = applyHit(m, f, o, mv); if (r !== 'miss') f.hitDone = true; } }
       if (T >= mv.s + mv.a + mv.r && f.y === 0) { f.st = 'idle'; f.move = null; f.t = 0; }
@@ -181,7 +201,7 @@ function separate(m) {
 
 function stepProj(m) {
   for (const p of m.proj) { p.x += p.vx; p.life--; const o = m.f[1 - p.owner], att = m.f[p.owner];
-    if (overlap({ x0: p.x - p.w / 2, x1: p.x + p.w / 2, y0: p.y - p.h / 2, y1: p.y + p.h / 2 }, hurt(o))) { const r = applyHit(m, att, o, { dmg: p.dmg, hs: 20, bs: 14, kb: 5, lvl: 'mid', chip: true, x: [0, 0], y: [p.y - 10, p.y + 10] }); if (r !== 'miss') p.life = 0; }
+    if (overlap({ x0: p.x - p.w / 2, x1: p.x + p.w / 2, y0: p.y - p.h / 2, y1: p.y + p.h / 2 }, hurt(o))) { const r = applyHit(m, att, o, { name: 'proj', dmg: p.dmg, hs: 20, bs: 14, kb: 5, lvl: 'mid', chip: true, x: [0, 0], y: [p.y - 10, p.y + 10] }); if (r !== 'miss') p.life = 0; }
     if (p.x < 0 || p.x > W) p.life = 0; }
   if (m.proj.length === 2 && m.proj[0].owner !== m.proj[1].owner && Math.abs(m.proj[0].x - m.proj[1].x) < 24) { m.proj.forEach((p) => (p.life = 0)); m.events.push({ type: 'clash' }); }
   m.proj = m.proj.filter((p) => p.life > 0);
@@ -265,6 +285,8 @@ export function cpuInput(m, idx, level = 0.5) {
   if (dist > 85) { ai.plan = fwd; if (x < 0.15) queue([{ B: 1 }, { F: 1 }, { F: 1, lk: 1 }]); else if (x < 0.25) queue([{ u: 1, F: 1 }, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { hk: 1 }]); return inp; }
   ai.plan = null;
   const opts = [[{ lp: 1 }, {}, {}, {}, {}, {}, {}, { lp: 1 }, {}, {}, {}, {}, {}, {}, {}, {}, { d: 1, hp: 1 }], [{ hk: 1 }], [{ d: 1, hk: 1 }], [{ d: 1, lk: 1 }, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { hp: 1 }], [{ F: 1, hp: 1 }], [{ B: 1 }, { B: 1 }, { B: 1 }, { B: 1 }, { B: 1 }, { B: 1 }]];
+  if (m.rules >= 2) { const c = kitFor(f.ch).chains[Math.floor(r() * 2)], gap = [{}, {}, {}, {}, {}];
+    opts.push(c.seq.flatMap((k, i) => (i ? [...gap, { [k]: 1 }] : [{ [k]: 1 }])), [{ lk: 1 }, {}, {}, { d: 1 }, {}, { d: 1, lk: 1 }], [{ d: 1 }, { d: 1, B: 1 }, { B: 1 }, { B: 1, lp: 1 }]); } // rules 2: strings, LK xx slide, overhead
   queue(opts[Math.floor(r() * opts.length)]);
   return inp;
 }

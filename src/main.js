@@ -5,7 +5,9 @@ import { stageCanvas, stageFx } from './stages.js';
 import { unlock, sfx, music, setMuted, isMuted } from './audio.js';
 import * as K from './kibble.js';
 import { Lockstep, stateHash, resultReport, encode, decode } from './netcode.js';
-import { InputRecorder, onlineSkins, clipMatch, clipPads } from './replay.js';
+import { InputRecorder, onlineSkins, clipMatch, clipPads, clipRules } from './replay.js';
+import { moveList, drills, kitFor } from './moves.js';
+import { DrillDriver, ComboTracker } from './trainer.js';
 import { OnlineSession, DISCONNECT_MS } from './online.js';
 import { stickDir, clampKnob, mergePad, PointerRoles, PAD_KEYS } from './touchinput.js';
 const QS = new URLSearchParams(location.search), API = QS.get('kibble') || 'https://kibble-pay.vercel.app';
@@ -22,7 +24,11 @@ const KEY1 = { KeyW: 'u', KeyS: 'd', KeyA: 'l', KeyD: 'r', KeyF: 'lp', KeyG: 'hp
 const KEY2 = { ArrowUp: 'u', ArrowDown: 'd', ArrowLeft: 'l', ArrowRight: 'r', KeyK: 'lp', KeyL: 'hp', Comma: 'lk', Period: 'hk' };
 const held = new Set(), tapped = new Set(), touchTap = {};
 addEventListener('keydown', (e) => { unlock(); if (KEY1[e.code] || KEY2[e.code] || e.code === 'Space') e.preventDefault(); if (e.repeat) return; held.add(e.code); tapped.add(e.code);
-  if (e.code === 'Enter' || e.code === 'Space') menuKey('ok'); if (e.code === 'Escape' || e.code === 'Backspace') menuKey('back'); if (e.code === 'KeyM') setMuted(!isMuted()); if (e.code === 'KeyP' && G.scr === 'fight' && G.mode !== 'online') G.paused = !G.paused; });
+  if (e.code === 'Enter' || e.code === 'Space') menuKey('ok'); if (e.code === 'Escape' || e.code === 'Backspace') menuKey('back'); if (e.code === 'KeyM') setMuted(!isMuted()); if (e.code === 'KeyP' && G.scr === 'fight' && G.mode !== 'online') G.paused = !G.paused; hotKey(e.code); });
+function hotKey(c) { // move list / trainer shortcuts (letters no fighter uses)
+  if (c === 'KeyI') { if (G.scr === 'select') openMoveList(ROSTER[G.sel[0]].id, 'select'); else if (G.scr === 'fight' && G.mode !== 'online' && G.mode !== 'replay') { G.paused = true; openMoveList(G.p1, 'pause'); } }
+  if (G.scr === 'movelist' && c === 'KeyT' && mlCanTrain()) startTrainer(ROSTER[ML.i].id);
+  if (G.scr === 'fight' && G.mode === 'trainer' && !G.paused) { if (c === 'KeyQ') trainerPick(-1); if (c === 'KeyE') trainerPick(1); if (c === 'KeyR') trainerReset(); if (c === 'KeyT') trainerReset(true); const n = +c.replace('Digit', ''); if (n >= 1 && n <= G.tr.list.length) trainerPick(n - 1 - G.tr.i); } }
 addEventListener('keyup', (e) => held.delete(e.code));
 addEventListener('blur', () => held.clear());
 function readPads() {
@@ -31,7 +37,8 @@ function readPads() {
   for (const c of new Set([...held, ...tapped])) { if (KEY1[c]) pads[0][KEY1[c]] = 1; if (KEY2[c]) pads[two ? 1 : 0][KEY2[c]] = 1; }
   for (const k in touchPad) if (touchPad[k] || touchTap[k]) pads[0][k] = 1;
   tapped.clear(); for (const k in touchTap) touchTap[k] = 0;
-  touch.classList.toggle('fight', G.scr === 'fight'); // the wide floating-stick zone only exists in fights (menus keep canvas taps)
+  touch.classList.toggle('fight', G.scr === 'fight'); touch.classList.toggle('hide', G.scr === 'movelist'); // move list: full-screen reading, canvas buttons only
+  // the wide floating-stick zone only exists in fights (menus keep canvas taps)
 }
 const edge = (i, k) => pads[i][k] && !prevPads[i][k];
 
@@ -89,7 +96,7 @@ cv.addEventListener('pointerdown', (e) => { unlock(); const r = cv.getBoundingCl
   for (const g of [...regions].reverse()) if (x >= g.x && x <= g.x + g.w && y >= g.y && y <= g.y + g.h) { sfx('select'); g.fn(); return; } if (G.scr === 'title') go('menu'); });
 
 // ---------------- screens ----------------
-const MENU = [['ARCADE', () => { G.mode = 'arcade'; go('select'); }], ['VERSUS 2P', () => { G.mode = 'versus'; go('select'); }], ['ONLINE 1V1', () => go('online')], ['PRACTICE LADDER (CPU)', () => { G.mode = 'ranked'; go('select'); }], ['SKIN SHOP + WALLET', () => go('shop')], ['HOW TO PLAY', () => go('help')]];
+const MENU = [['ARCADE', () => { G.mode = 'arcade'; go('select'); }], ['VERSUS 2P', () => { G.mode = 'versus'; go('select'); }], ['ONLINE 1V1', () => go('online')], ['PRACTICE LADDER (CPU)', () => { G.mode = 'ranked'; go('select'); }], ['SKIN SHOP + WALLET', () => go('shop')], ['HOW TO PLAY', () => go('help')], ['COMBO TRAINER', () => { G.mode = 'trainer'; go('select'); }]];
 function go(s) { G.scr = s; G.t = 0; regions = []; G.ready = [false, false]; if (s !== 'lobby' && s !== 'versus' && s !== 'fight' && s !== 'onlineres' && G.net?.s && !G.net.s.closed) { G.net.s.leave(); G.net = null; }
   if (s === 'menu' || s === 'online' || s === 'title' || s === 'select' || s === 'shop' || s === 'help') music('menu'); if (s === 'select') refreshOwned(); }
 async function refreshOwned() { const inv = K.wallet.address ? await K.wallet.inventory() : []; G.holder = await K.isHolder(); G.owned = ['base', ...(G.holder ? ['alt'] : []), ...inv.filter((x) => SKINS[x])]; G.bal = K.wallet.address ? (await K.wallet.balance()).ui : null; }
@@ -99,6 +106,7 @@ function menuKey(k) {
   if (G.scr === 'online') { const n = ONLINE.length; if (k === 'up') G.onI = (G.onI + n - 1) % n; if (k === 'down') G.onI = (G.onI + 1) % n; if (k === 'ok') { sfx('confirm'); ONLINE[G.onI][1](); } if (k === 'back') go('menu'); return; }
   if (G.scr === 'lobby') { if (k === 'back') go('online'); return; }
   if (G.scr === 'onlineres') { if (k === 'ok' || k === 'back') { sfx('confirm'); go('online'); } return; }
+  if (G.scr === 'movelist') { if (k === 'back' || k === 'ok') closeMoveList(); return; }
   if (G.scr === 'select') { if (k === 'back') { if (G.ready[0]) G.ready[0] = false; else go('menu'); } return; }
   if (G.scr === 'fight') { if (G.mode === 'online') return; if (k === 'back') { if (G.paused) { G.paused = false; go('menu'); } else G.paused = true; } return; }
   if (G.scr === 'gameover' || G.scr === 'rankres' || G.scr === 'ending') { if (k === 'ok') { sfx('confirm'); go(G.scr === 'rankres' ? 'select' : 'menu'); } return; }
@@ -124,6 +132,7 @@ function selectStep() {
   if (need) { G.p1 = ROSTER[G.sel[0]].id; G.skin = [G.owned[G.skinIdx[0]] || 'base', G.owned[G.skinIdx[1]] || 'base'];
     if (G.mode === 'versus') { G.p2 = ROSTER[G.sel[1]].id; G.vsT = 0; go('versus'); }
     else if (G.mode === 'online') startOnline();
+    else if (G.mode === 'trainer') startTrainer(G.p1);
     else if (G.mode === 'arcade') { const others = ROSTER.filter((c) => c.id !== G.p1).map((c) => c.id); for (let i = others.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [others[i], others[j]] = [others[j], others[i]]; } G.ladder = [...others.slice(0, 6), BOSS.id]; G.li = 0; go('ladder'); }
     else { const lb = K.leaderboard(), me = lb.findIndex((e) => e.you), opp = lb[Math.max(0, me - 1)].you ? lb[me + 1] : lb[Math.max(0, me - 1)]; G.rankOpp = opp; G.p2 = ROSTER[opp.char % ROSTER.length].id; if (G.p2 === G.p1) G.p2 = ROSTER[(opp.char + 1) % ROSTER.length].id; G.cpuLevel = Math.max(0.3, Math.min(0.95, (opp.rating - 1000) / 900)); go('versus'); } }
 }
@@ -258,13 +267,13 @@ function drawTitle() {
 }
 function drawMenu() {
   ctx.drawImage(stageCanvas('moon'), 0, 0); ctx.fillStyle = 'rgba(6,4,20,.6)'; ctx.fillRect(0, 0, W, H); text('MEME BRAWL', 320, 46, 24, '#ffd25a');
-  MENU.forEach(([n, fn], i) => { const y = 88 + i * 40, on = i === G.menuI; panel(170, y - 16, 300, 32, on ? '#3a2060' : '#121a36', on ? '#ffd25a' : '#4a4f8c'); text(n, 320, y, 12, on ? '#ffd25a' : '#fff6e0'); btn(170, y - 16, 300, 32, () => { G.menuI = i; fn(); }); });
+  MENU.forEach(([n, fn], i) => { const y = 84 + i * 35, on = i === G.menuI; panel(170, y - 14, 300, 28, on ? '#3a2060' : '#121a36', on ? '#ffd25a' : '#4a4f8c'); text(n, 320, y, 12, on ? '#ffd25a' : '#fff6e0'); btn(170, y - 16, 300, 32, () => { G.menuI = i; fn(); }); });
   drawSprite(byId('inu'), 'win', 'base', 90, 330, 2.2, 1); drawSprite(BOSS, 'idle', 'base', 560, 330, 2.2, -1);
   const p = K.profile(); text(`RANK ${p.rating} ELO  ${K.wallet.address ? 'WALLET ' + K.wallet.address.slice(0, 4) + '..' + K.wallet.address.slice(-4) : 'NO WALLET'}${K.wallet.simulated ? ' (SIM)' : ''}`, 320, 340, 7, '#9ab0d4');
 }
 function drawSelect() {
   ctx.drawImage(stageCanvas('canyon'), 0, 0); ctx.fillStyle = 'rgba(6,4,20,.7)'; ctx.fillRect(0, 0, W, H);
-  text(G.mode === 'versus' ? 'VERSUS: CHOOSE YOUR BAG' : G.mode === 'online' ? 'ONLINE: CHOOSE YOUR BAG' : G.mode === 'ranked' ? 'PRACTICE: CHOOSE YOUR BAG' : 'ARCADE: CHOOSE YOUR BAG', 320, 20, 12, '#ffd25a');
+  text(G.mode === 'versus' ? 'VERSUS: CHOOSE YOUR BAG' : G.mode === 'online' ? 'ONLINE: CHOOSE YOUR BAG' : G.mode === 'ranked' ? 'PRACTICE: CHOOSE YOUR BAG' : G.mode === 'trainer' ? 'TRAINER: CHOOSE YOUR BAG' : 'ARCADE: CHOOSE YOUR BAG', 320, 20, 12, '#ffd25a');
   const tw = 70, th = 62, x0 = 320 - (COLS * (tw + 6)) / 2 + 3, y0 = 38;
   ROSTER.forEach((c, i) => { const x = x0 + (i % COLS) * (tw + 6), y = y0 + Math.floor(i / COLS) * (th + 6); const on0 = G.sel[0] === i, on1 = G.mode === 'versus' && G.sel[1] === i;
     panel(x, y, tw, th, '#1c2046', on0 && on1 ? '#ff5aa8' : on0 ? '#3ec46a' : on1 ? '#3a7ac8' : '#4a4f8c'); portrait(c, x + 2, y + 2, 2.2, 'base');
@@ -276,13 +285,15 @@ function drawSelect() {
     const tx = face > 0 ? x + 60 : x - 60, al = face > 0 ? 'left' : 'right';
     text(c.name.toUpperCase(), tx, 196, 10, '#ffd25a', al); text(c.tag, tx, 212, 6, '#9ab0d4', al, SMALL, null);
     text(c.bio, tx, 226, 7, '#fff6e0', al, SMALL, null);
-    const S = c.specials; [[`D,DF,F + P`, S.proj.name], [`B,F + K`, S.rush.name], [`D,D + P`, S.rise.name], [`SUPER D,DF,F + K`, S.super.name]].forEach(([a, n], j) => text(`${a}  ${n}`, tx, 244 + j * 13, 7, j === 3 ? '#ff5aa8' : '#fff6e0', al, SMALL, null));
-    text(`SKIN: ${SKINS[skin]}  (HK to cycle; ${G.owned.length} owned)`, tx, 302, 6, '#3fb6a8', al, SMALL, null);
+    moveList(c).filter((r) => r.group === 'SPECIALS' || r.group === 'SUPER').forEach((r, j) => text(`${r.group === 'SUPER' ? 'SUPER ' : ''}${inputStr(r.input)}  ${r.name}${r.isNew ? ' (new)' : ''}`, tx, 240 + j * 10, 6, r.group === 'SUPER' ? '#ff5aa8' : r.isNew ? '#7ad3f0' : '#fff6e0', al, SMALL, null)); // generated from the move data
+    text(`SKIN: ${SKINS[skin]}  (HK to cycle; ${G.owned.length} owned)`, tx, 304, 6, '#3fb6a8', al, SMALL, null);
     if (G.ready[p]) text('READY!', x, 180, 12, '#3ec46a'); };
   show(0, 60, 1); if (G.mode === 'versus') show(1, 580, -1);
-  else { panel(400, 190, 220, 120, '#121a36', '#4a4f8c'); text(G.mode === 'online' ? 'ONLINE 1V1: LOCK IN TO MATCH' : G.mode === 'ranked' ? `PRACTICE ELO ${K.profile().rating}` : 'LADDER: 6 RIVALS + BOSS', 510, 206, 8, '#ffd25a'); text('Keys: WASD move, F/G punch', 510, 228, 7, '#fff6e0', 'center', SMALL, null); text('V/B kick (or arrows + K L , .)', 510, 242, 7, '#fff6e0', 'center', SMALL, null); text('LP/Enter to lock in', 510, 262, 7, '#fff6e0', 'center', SMALL, null); text(G.holder ? 'HOLDER: alt costumes unlocked' : 'Hold 1000 KIBBLE: alt costumes', 510, 282, 7, '#3fb6a8', 'center', SMALL, null); text('cosmetic only, no stat boosts', 510, 296, 6, '#9ab0d4', 'center', SMALL, null); }
+  else { panel(400, 190, 220, 120, '#121a36', '#4a4f8c'); text(G.mode === 'online' ? 'ONLINE 1V1: LOCK IN TO MATCH' : G.mode === 'ranked' ? `PRACTICE ELO ${K.profile().rating}` : G.mode === 'trainer' ? 'COMBO TRAINER: NO KIBBLE' : 'LADDER: 6 RIVALS + BOSS', 510, 206, 8, '#ffd25a'); text('Keys: WASD move, F/G punch', 510, 228, 7, '#fff6e0', 'center', SMALL, null); text('V/B kick (or arrows + K L , .)', 510, 242, 7, '#fff6e0', 'center', SMALL, null); text('LP/Enter to lock in', 510, 262, 7, '#fff6e0', 'center', SMALL, null); text(G.holder ? 'HOLDER: alt costumes unlocked' : 'Hold 1000 KIBBLE: alt costumes', 510, 282, 7, '#3fb6a8', 'center', SMALL, null); text('cosmetic only, no stat boosts', 510, 296, 6, '#9ab0d4', 'center', SMALL, null); }
   btn(560, 330, 72, 24, () => go('menu')); text('BACK', 596, 342, 8, '#9ab0d4');
+  panel(8, 6, 96, 20, '#3a2060', '#ffd25a'); text('MOVE LIST', 56, 16.5, 7, '#ffd25a'); btn(4, 2, 104, 28, () => openMoveList(ROSTER[G.sel[0]].id, 'select')); text('I', 112, 16, 6, '#9ab0d4', 'left', SMALL, null);
 }
+const inputStr = (t) => t.map((x, i) => (x === '+' ? ' + ' : (i && t[i - 1] !== '+' ? ',' : '') + x)).join('');
 function drawVersus() {
   const a = byId(G.p1), b = byId(G.p2), t = G.t, slide = Math.max(0, 1 - t / 30);
   ctx.fillStyle = '#120a1e'; ctx.fillRect(0, 0, W, H); for (let i = 0; i < 16; i++) { ctx.fillStyle = i % 2 ? '#2a1036' : '#1c0a28'; ctx.beginPath(); ctx.moveTo(320, 180); ctx.arc(320, 180, 600, i * Math.PI / 8 + t / 100, (i + 1) * Math.PI / 8 + t / 100); ctx.fill(); }
@@ -302,8 +313,95 @@ function drawLadder() {
 function drawEnd(title, sub, col) { ctx.fillStyle = '#120a1e'; ctx.fillRect(0, 0, W, H); text(title, 320, 120, 26, col); sub.forEach((s, i) => text(s, 320, 170 + i * 20, 9, '#fff6e0')); if (Math.floor(G.t / 30) % 2) text('PRESS START / TAP', 320, 320, 10, '#9ab0d4'); btn(0, 0, W, H, () => menuKey('ok')); }
 function drawHelp() {
   ctx.fillStyle = '#120a1e'; ctx.fillRect(0, 0, W, H); text('HOW TO PLAY', 320, 22, 14, '#ffd25a');
-  const L = ['P1 KEYS: WASD move/jump/crouch   F light punch  G heavy punch   V light kick  B heavy kick', 'P2 KEYS: arrows   K LP   L HP   , LK   . HK     (1P can use either set)', 'HOLD BACK to block. Crouch-block lows; stand-block jump attacks.', 'THROW: forward + HP when close (unblockable)', 'SPECIALS (facing right):  D,DF,F+P projectile   B,F+K rush   D,D+P rising launcher', 'SUPER: fill the BAG METER, then D,DF,F+K', 'JUGGLES: crouch HP and D,D+P launch; keep hitting while they are airborne (4 max)', 'Best of 3 rounds, 99 sec. Win the match, then PUNCHLINE TIME:', '   D, D + HK within 3 sec for a RUG PULL finisher (cartoon, no gore)', 'TOUCH: D-pad + 4 buttons. Menus: LP = OK, LK = back, HK = cycle skin', 'P = pause, M = mute, Esc = back'];
-  L.forEach((s, i) => text(s, 30, 56 + i * 24, 8, '#fff6e0', 'left', SMALL, null)); btn(0, 0, W, H, () => go('menu'));
+  const L = ['P1 KEYS: WASD move/jump/crouch   F light punch  G heavy punch   V light kick  B heavy kick', 'P2 KEYS: arrows   K LP   L HP   , LK   . HK     (1P can use either set)', 'HOLD BACK to block. Crouch-block lows; stand-block jump attacks.', 'THROW: forward + HP when close (unblockable)', 'SPECIALS (facing right): D,DF,F+P shot  B,F+K rush  D,D+P launcher  D,D+K low slide  D,DB,B+P overhead', 'SUPER: full BAG METER, then D,DF,F+K.   STRINGS: tap normals in rhythm (each fighter has 2)', 'CANCELS: light normals, crouch HP and string hits cancel into specials. MOVE LIST: I key / pause', 'COMBO TRAINER (menu): dummy, input display, step checkmarks. No KIBBLE.', 'Best of 3 rounds, 99 sec. Win the match, then PUNCHLINE TIME:', '   D, D + HK within 3 sec for a RUG PULL finisher (cartoon, no gore)', 'TOUCH: stick (left) + JUMP and LP HP LK HK (right). Menus: LP = OK, LK = back, HK = skin', 'P = pause, M = mute, Esc = back'];
+  L.forEach((s, i) => text(s, 30, 50 + i * 22, 8, '#fff6e0', 'left', SMALL, null)); btn(0, 0, W, H, () => go('menu'));
+}
+// ---------------- move list + combo trainer ----------------
+// Everything shown here is generated from the real move data (moves.js moveList/drills), never typed by hand.
+const TOK_COL = { LP: '#3a7ac8', HP: '#c8282e', LK: '#3ec46a', HK: '#c99a1e', P: '#7a5ad8', K: '#2a9d8f', SP: '#ff5aa8' };
+const DIRV = { U: [0, -1], D: [0, 1], F: [1, 0], B: [-1, 0], UF: [1, -1], UB: [-1, -1], DF: [1, 1], DB: [-1, 1] };
+const NUMTOK = { 1: 'DB', 2: 'D', 3: 'DF', 4: 'B', 5: 'N', 6: 'F', 7: 'UB', 8: 'U', 9: 'UF' };
+function drawTokens(toks, x, y, s = 14, dry = false) { let cx = x;
+  for (const t of toks) { const box = DIRV[t] || t === 'N' || TOK_COL[t], w = box ? s : t === 'xx' ? 14 : 8;
+    if (!dry) {
+      if (DIRV[t] || t === 'N') { ctx.fillStyle = '#4a4f8c'; ctx.fillRect(cx, y - s / 2, s, s); ctx.fillStyle = '#1c2046'; ctx.fillRect(cx + 1, y - s / 2 + 1, s - 2, s - 2); const c0 = cx + s / 2;
+        if (t === 'N') { ctx.fillStyle = '#9ab0d4'; ctx.fillRect(Math.round(c0 - 2), Math.round(y - 2), 4, 4); }
+        else { const [vx, vy] = DIRV[t], n = Math.hypot(vx, vy), ux = vx / n, uy = vy / n, L = s * 0.3, h = s * 0.2, hx = c0 + ux * L, hy = y + uy * L; ctx.strokeStyle = '#ffd25a'; ctx.lineWidth = 2; ctx.lineCap = 'square'; ctx.beginPath(); ctx.moveTo(c0 - ux * L, y - uy * L); ctx.lineTo(hx, hy); ctx.moveTo(hx + h * (-ux + uy), hy + h * (-uy - ux)); ctx.lineTo(hx, hy); ctx.lineTo(hx + h * (-ux - uy), hy + h * (-uy + ux)); ctx.stroke(); } }
+      else if (TOK_COL[t]) { ctx.fillStyle = '#0c0a18'; ctx.beginPath(); ctx.arc(cx + s / 2, y, s / 2, 0, 7); ctx.fill(); ctx.fillStyle = TOK_COL[t]; ctx.beginPath(); ctx.arc(cx + s / 2, y, s / 2 - 1, 0, 7); ctx.fill(); text(t, cx + s / 2 + 0.5, y + 0.5, t.length > 1 ? Math.max(5, Math.round(s * 0.36)) : 7, '#fff', 'center', FONT, null); }
+      else text(t, cx + w / 2, y, t === 'xx' ? 6 : 8, '#9ab0d4', 'center', FONT, null); }
+    cx += w + 2; }
+  return cx - x - 2; }
+const ML = { i: 0, from: 'select' };
+function openMoveList(id, from) { ML.i = Math.max(0, ROSTER.findIndex((c) => c.id === id)); ML.from = from; go('movelist'); }
+function closeMoveList() { if (ML.from === 'pause') return go('fight'); G.sel[0] = ML.i; G.skinIdx[0] = 0; go('select'); }
+const mlCanTrain = () => ML.from !== 'pause' || G.mode === 'trainer';
+function mlNav(d) { ML.i = (ML.i + ROSTER.length + d) % ROSTER.length; sfx('select'); }
+const GROUP_TAG = { SPECIALS: ['SPECIAL', '#3a7ac8'], SUPER: ['SUPER', '#ff5aa8'], STRINGS: ['STRING', '#3ec46a'], CANCELS: ['CANCEL', '#e3b341'], BASICS: ['BASIC', '#6a6f9c'] };
+function drawMoveList() {
+  const c = ROSTER[ML.i], rows = moveList(c), k = kitFor(c);
+  ctx.drawImage(stageCanvas(c.stage), 0, 0); ctx.fillStyle = 'rgba(6,4,20,.88)'; ctx.fillRect(0, 0, W, H);
+  panel(8, 6, 39, 34, '#1c2046', '#4a4f8c'); portrait(c, 8, 6, 1.3, 'base');
+  text(c.name.toUpperCase(), 56, 16, 12, '#ffd25a', 'left'); text(`MOVE LIST  ·  ${k.style.toUpperCase()}  ·  ${ML.i + 1}/${ROSTER.length}  ·  inputs shown facing right`, 56, 33, 7, '#9ab0d4', 'left', SMALL, null);
+  const y0 = 45, rh = 25;
+  rows.forEach((r, j) => { const y = y0 + j * rh, [tag, col] = GROUP_TAG[r.group];
+    ctx.fillStyle = j % 2 ? 'rgba(255,255,255,.04)' : 'rgba(255,255,255,.09)'; ctx.fillRect(6, y, 628, rh - 2);
+    ctx.fillStyle = col; ctx.fillRect(8, y + 4, 56, 14); text(tag, 36, y + 11.5, 6, '#fff', 'center', FONT, null);
+    text(r.name.toUpperCase(), 72, y + 8, 8, r.group === 'SUPER' ? '#ff5aa8' : '#fff6e0', 'left'); ctx.font = `8px ${FONT}`; const nw = ctx.measureText(r.name.toUpperCase()).width;
+    if (r.isNew) { ctx.fillStyle = '#c8282e'; ctx.fillRect(76 + nw, y + 2, 24, 11); text('NEW', 88 + nw, y + 8, 6, '#fff', 'center', FONT, null); }
+    text(r.note, 72, y + 18, 7, '#9ab0d4', 'left', SMALL, null);
+    if (r.group !== 'CANCELS') { drawTokens(r.input, 352, y + 11, 14);
+      text(r.dmg != null ? `${r.dmg} DMG` : '', 630, y + 8, 7, '#ffd25a', 'right', FONT, null);
+      text(r.hits ? `${r.hits} hits` : r.startup != null ? `${r.startup}f startup` : '', 630, y + 18, 7, '#9ab0d4', 'right', SMALL, null); }
+    else drawTokens(['LP', 'xx', ...r.input.filter((t) => t !== 'xx')], 352, y + 8, 12); });
+  const bb = (x, w, label, fn, hot) => { panel(x, 320, w, 26, hot ? '#3a2060' : '#121a36', hot ? '#ffd25a' : '#4a4f8c'); text(label, x + w / 2, 333, 8, hot ? '#ffd25a' : '#fff6e0'); btn(x - 2, 316, w + 4, 34, fn); };
+  bb(8, 70, '< PREV', () => mlNav(-1)); bb(86, 70, 'NEXT >', () => mlNav(1));
+  text(`A/D or arrows: fighter  ·  ${mlCanTrain() ? 'T: combo trainer  ·  ' : ''}Esc: back`, 320, 307, 7, '#9ab0d4', 'center', SMALL, null); // bottom-centre stays clear for the Inu Verse guest pill
+  if (mlCanTrain()) bb(432, 104, 'TRAINER', () => startTrainer(c.id), true);
+  bb(548, 84, ML.from === 'pause' ? 'RESUME' : 'BACK', closeMoveList);
+}
+// Combo Trainer: a fight vs a dummy that never attacks. Frozen timer, 9999 HP dummy, no KO, no $KIBBLE, no rank.
+function trainerDummy(id) { return id === 'sealbert' ? 'boomer' : 'sealbert'; }
+function trainerMatch() { const id = G.p1, m = makeMatch(id, G.p2, { o1: { skin: G.skin?.[0] || 'base' }, o2: { skin: 'base', hp: 9999 }, seed: 7, stage: byId(id).stage });
+  m.phase = 'fight'; m.pt = 0; m.banner = null; m.events.length = 0; m.f[0].x = 250; m.f[1].x = 310; return m; }
+function startTrainer(id) { G.mode = 'trainer'; G.p1 = id; G.p2 = trainerDummy(id); G.skin = G.skin || ['base', 'base']; const keep = G.tr?.p1 === id ? G.tr.i : 0;
+  G.tr = { p1: id, list: drills(byId(id)), i: keep, demo: null, hist: [], quiet: 0, doneT: 0 }; trainerReset(); G.paused = false; G.fx = []; go('fight'); music(G.match.stage); }
+function trainerReset(demo = false) { const T = G.tr; G.match = trainerMatch(); const old = T.tracker; T.tracker = new ComboTracker(T.list[T.i]); if (old && old.drill === T.list[T.i]) { T.tracker.clears = old.clears; T.tracker.best = old.best; }
+  T.demo = demo ? new DrillDriver(T.list[T.i], 0, 2) : null; T.quiet = 0; T.doneT = 0; G.fx = []; }
+function trainerPick(d) { const T = G.tr; T.i = (T.i + T.list.length + d) % T.list.length; T.tracker = null; trainerReset(); sfx('select'); }
+function updateTrainer() {
+  const m = G.match, T = G.tr, d = T.list[T.i], tr = T.tracker;
+  const i0 = T.demo ? T.demo.next(m) : pads[0];
+  if (d.superMeter && m.f[0].combo === 0 && m.f[0].st !== 'attack') m.f[0].meter = 100;
+  step(m, [i0, {}]); m.timer = ROUND_FRAMES; m.f[1].hp = Math.max(m.f[1].hp, 9000); m.f[0].hp = m.f[0].maxHp;
+  tr.feed(m.events, m); for (const ev of m.events) spawnFx(ev); m.events.length = 0;
+  if (tr.done && T.demo) T.demo.done = true;
+  if (T.demo?.done && (tr.done || T.demo.failed)) T.demo = null;
+  // input display: one row per change of stick direction / held buttons
+  const dir = NUMTOK[relDir(i0, m.f[0].face)], btns = ['lp', 'hp', 'lk', 'hk'].filter((b) => i0[b]).map((b) => b.toUpperCase()), key = dir + btns.join(), h = T.hist[0];
+  if (h && h.key === key) h.n++; else { T.hist.unshift({ key, dir, btns, n: 1 }); T.hist.length = Math.min(T.hist.length, 10); }
+  const busy = m.f[0].st !== 'idle' && m.f[0].st !== 'crouch' && m.f[0].st !== 'walk' || m.f[1].st !== 'idle' || m.proj.length; T.quiet = busy ? 0 : T.quiet + 1;
+  if (tr.done) { if (++T.doneT > 90 && T.quiet > 20) trainerReset(); }
+  else if (T.quiet > 90 && (Math.abs(m.f[0].x - m.f[1].x) > 170 || m.f[1].x < 60 || m.f[1].x > 580)) trainerReset(); // walked away / cornered: back to start spacing
+}
+function relDir(inp, face) { const f = face > 0 ? inp.r : inp.l, b = face > 0 ? inp.l : inp.r; return inp.d ? (f ? 3 : b ? 1 : 2) : inp.u ? (f ? 9 : b ? 7 : 8) : f ? 6 : b ? 4 : 5; }
+function trainerHud(m) {
+  const T = G.tr, d = T.list[T.i], tr = T.tracker, n = d.steps.length;
+  panel(8, 6, 540, 66, 'rgba(14,18,44,.9)', '#4a4f8c');
+  const sb = (x, y, w, h, label, fn) => { panel(x, y, w, h, '#1c2046', '#4a4f8c'); text(label, x + w / 2, y + h / 2 + 0.5, 8, '#fff6e0'); btn(x - 3, y - 3, w + 6, h + 6, fn); };
+  sb(12, 10, 24, 20, '<', () => trainerPick(-1)); sb(520, 10, 24, 20, '>', () => trainerPick(1));
+  text(`DRILL ${T.i + 1}/${T.list.length}: ${d.name.toUpperCase()}`, 278, 20, 8, '#ffd25a');
+  const s = 13, ws = d.steps.map((st) => drawTokens(st.tokens, 0, 0, s, true) + 10), tot = ws.reduce((a, b) => a + b, 0) + (n - 1) * 16; let x = 278 - tot / 2;
+  d.steps.forEach((st, j) => { const done = j < tr.prog, cur = j === tr.prog && !tr.done, w = ws[j];
+    panel(x, 34, w, 20, done ? '#1f5a3a' : '#1c2046', done ? '#3ec46a' : cur ? (m.tick % 30 < 15 ? '#ffd25a' : '#a07a1e') : '#4a4f8c'); drawTokens(st.tokens, x + 5, 44, s);
+    if (done) { ctx.strokeStyle = '#3ec46a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + w - 6, 31); ctx.lineTo(x + w - 2, 35); ctx.lineTo(x + w + 5, 26); ctx.stroke(); }
+    if (j < n - 1) text(d.steps[j + 1].move === 'super' || d.steps[j + 1].motion ? 'xx' : '>', x + w + 8, 44, 6, '#9ab0d4', 'center', FONT, null); x += w + 16; });
+  const msg = tr.done ? [`COMBO COMPLETE!  ${tr.hits} HITS  ${tr.dmg} DMG`, '#3ec46a'] : T.demo ? ['WATCH: SHOW ME demo', '#7ad3f0'] : tr.dropped ? ['DROPPED: TRY AGAIN', '#ff7a4a'] : tr.prog ? [`STEP ${tr.prog}/${n}  ${tr.hits} HITS  ${tr.dmg} DMG`, '#ffd25a'] : [d.superMeter ? 'BAG METER KEPT FULL FOR THIS DRILL' : 'DO THE INPUTS ON THE DUMMY', '#fff6e0'];
+  text(msg[0], 278, 63, 7, msg[1]); text(`CLEARS ${tr.clears}`, 540, 63, 6, '#9ab0d4', 'right', FONT, null);
+  sb(558, 40, 76, 20, 'SHOW ME', () => trainerReset(true)); sb(558, 66, 76, 20, 'RESET', () => trainerReset()); sb(558, 92, 76, 20, 'MOVES', () => { G.paused = true; openMoveList(G.p1, 'pause'); });
+  panel(8, 82, 66, 10 * 13 + 14, 'rgba(14,18,44,.85)', '#4a4f8c'); text('INPUT', 41, 89, 6, '#9ab0d4', 'center', FONT, null);
+  T.hist.forEach((h, j) => { const y = 102 + j * 13; text(String(Math.min(99, h.n)), 24, y, 6, j ? '#9ab0d4' : '#fff6e0', 'right', FONT, null); drawTokens([h.dir, ...h.btns], 27, y, 11); });
+  if (m.f[0].combo >= 2) text(`${m.f[0].combo} HITS`, 320, 96, 12, '#ffd25a');
+  text('COMBO TRAINER · the dummy never attacks · no $KIBBLE, no rank · Q/E drill  R reset  T show me', 320, 352, 6, '#9ab0d4', 'center', SMALL, null);
 }
 async function shopAct(i) {
   if (i < K.SHOP.length) { const it = K.SHOP[i]; if (K.mode !== 'live' && K.mode !== 'demo') { G.msg = K.SOON_MSG; return; } if (!K.wallet.address) { G.msg = 'Connect a wallet first'; return; } const r = await K.wallet.buy({ itemId: it.id }); G.msg = r.ok ? `Bought ${it.name}! sig ${String(r.signature).slice(0, 14)}` : `${r.error === K.SOON_MSG ? '' : 'Failed: '}${r.error}`; if (r.ok) sfx('coin'); }
@@ -355,10 +453,12 @@ function updateMenus(scr) {
   else if ((G.scr === 'ladder' || G.scr === 'onlineres' || G.scr === 'gameover' || G.scr === 'ending' || G.scr === 'rankres') && G.t > 20 && (edge(0, 'lp') || edge(0, 'hp'))) menuKey('ok');
   else if (G.scr === 'title' && G.t > 10 && (edge(0, 'lp') || edge(0, 'hp'))) menuKey('ok');
   else if (G.scr === 'select') selectStep();
+  else if (G.scr === 'movelist') { if (edge(0, 'l')) mlNav(-1); if (edge(0, 'r')) mlNav(1); if (G.t > 10 && edge(0, 'lk')) closeMoveList(); }
 }
 function updateFight() {
   if (G.mode === 'online') return updateOnline();
   if (G.mode === 'replay') return updateReplay();
+  if (G.mode === 'trainer') { if (!G.paused) updateTrainer(); return; }
   if (G.scr === 'fight' && !G.paused) {
     const m = G.match, i0 = pads[0], i1 = G.mode === 'versus' ? pads[1] : cpuInput(m, 1, G.cpuLevel); step(m, [i0, i1]);
     for (const ev of m.events) spawnFx(ev); m.events.length = 0;
@@ -386,7 +486,7 @@ function onlineReady(s) { const P = s.room.players; G.p1 = P[0].char; G.p2 = P[1
 // ?clip=CODE: watch a verified clip (public /api/clips). Simulate silently to the highlight, then play it in real time.
 async function startClip(id) {
   try { const r = await fetch(`${API}/api/pvp?action=clip&id=${encodeURIComponent(id)}`).then((x) => x.json()); if (!r.ok) throw new Error(r.reason || 'clip not found');
-    const c = r.clip, m = clipMatch(c, makeMatch), pads = clipPads(c);
+    const c = r.clip, m = clipMatch(c, makeMatch, clipRules(c, { makeMatch, step }) ?? undefined), pads = clipPads(c); // old clips replay under the rules they were played with
     for (let t = 0; t < c.highlight.from; t++) { const v = pads.next(); if (v.done) break; step(m, [decode(v.value[0]), decode(v.value[1])]); m.events.length = 0; }
     G.clip = { c, pads }; G.mode = 'replay'; G.match = m; G.p1 = c.players[0].char; G.p2 = c.players[1].char; G.fx = []; go('fight'); music(m.stage);
   } catch (e) { G.msg = 'Clip: ' + e.message; }
@@ -442,7 +542,7 @@ function drawOnlineRes() {
 function render() {
   regions = []; ctx.save(); if (G.shake > 0) ctx.translate(Math.round((Math.random() - 0.5) * G.shake), Math.round((Math.random() - 0.5) * G.shake)); /* integer offsets (no subpixel blur); decays per sim step, not per rendered frame (was 2x longer/shorter at 30/120Hz) */
   switch (G.scr) {
-    case 'title': drawTitle(); break; case 'menu': drawMenu(); break; case 'select': drawSelect(); break; case 'versus': drawVersus(); break; case 'ladder': drawLadder(); break; case 'shop': drawShop(); break; case 'help': drawHelp(); break; case 'online': drawOnline(); break; case 'lobby': drawLobby(); break; case 'onlineres': drawOnlineRes(); break;
+    case 'title': drawTitle(); break; case 'menu': drawMenu(); break; case 'select': drawSelect(); break; case 'versus': drawVersus(); break; case 'ladder': drawLadder(); break; case 'shop': drawShop(); break; case 'help': drawHelp(); break; case 'online': drawOnline(); break; case 'lobby': drawLobby(); break; case 'onlineres': drawOnlineRes(); break; case 'movelist': drawMoveList(); break;
     case 'gameover': drawEnd(G.mode === 'versus' ? `${G.match.f[G.match.matchWinner].ch.name.toUpperCase()} WINS` : 'GOT RUGGED', G.mode === 'versus' ? ['GG. Rematch from the menu.'] : ['The ladder humbled you.', 'Diamond paws. Try again.'], '#ff5a5a'); break;
     case 'ending': drawEnd('LADDER CLEARED', [`${byId(G.p1).name} rugged Lord Rugsworth.`, 'The Kibble Verse is safe. Wen sequel.'], '#ffd25a'); drawSprite(byId(G.p1), Math.floor(G.t / 20) % 2 ? 'win' : 'win2', G.skin[0], 320, 300, 2.4, 1); break;
     case 'rankres': { const r = G.lastRank; drawEnd(r.won ? 'RANKED WIN' : 'RANKED LOSS', [`vs ${r.opp.name}`, `ELO ${r.before} -> ${r.after} (${r.after - r.before >= 0 ? '+' : ''}${r.after - r.before})`, `Current rank #${K.leaderboard().find((e) => e.you).rank}`, ...(r.posted ? [r.posted] : [])], r.won ? '#3ec46a' : '#ff5a5a'); break; }
@@ -450,11 +550,14 @@ function render() {
       const m = G.match; ctx.drawImage(stageCanvas(m.stage), 0, 0); stageFx(ctx, m.stage, m.tick);
       if (m.phase === 'finisher' || m.phase === 'finish') { ctx.fillStyle = `rgba(20,0,10,${Math.min(0.5, m.pt / 60)})`; ctx.fillRect(0, 0, W, H); }
       const order = [...m.f].sort((a, b) => (a.st === 'attack' ? 1 : 0) - (b.st === 'attack' ? 1 : 0)); for (const f of order) fighterDraw(f, m);
-      for (const p of m.proj) drawProj(p, m.tick); if (m.finisher) finisherOverlay(m); drawFx(); hud(m);
+      for (const p of m.proj) drawProj(p, m.tick); if (m.finisher) finisherOverlay(m); drawFx(); if (G.mode === 'trainer') trainerHud(m); else hud(m);
+      for (const f of m.f) if (f.st === 'attack' && f.move?.special && f.move.name !== 'super' && f.t < 40) text(f.move.special.toUpperCase(), Math.max(70, Math.min(570, f.x)), GY - f.y - 128, 7, f.move.name === 'super' ? '#ff5aa8' : '#fff6e0'); // special name callout
       if (G.mode === 'replay' && G.clip) { const c = G.clip.c; text('CLIP REPLAY · VERIFIED' + (c.bracket ? ' BRACKET' : ' RANKED') + ' 1V1', 320, 342, 6, '#ffd25a', 'center', SMALL, null); text(c.players[0].short || '', 60, 58, 6, '#9ab0d4', 'left', SMALL, null); text(c.players[1].short || '', 580, 58, 6, '#9ab0d4', 'right', SMALL, null); }
       if (G.mode === 'online' && G.net) { const N = G.net; text(N.s.side ? 'YOU' : 'YOU', N.s.side ? 580 : 60, 58, 7, '#3ec46a', N.s.side ? 'right' : 'left'); text(`${N.s.via === 'p2p' ? 'P2P' : 'RELAY'} D${N.s.delay}`, 320, 46, 6, '#9ab0d4', 'center', SMALL, null);
         if (N.stall > 30) { ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(0, 130, W, 60); text('WAITING FOR OPPONENT...', 320, 150, 12, '#ffd25a'); text(`forfeit in ${Math.max(0, Math.ceil((DISCONNECT_MS - N.s.silentFor()) / 1000))}s if they don't return`, 320, 172, 7, '#fff6e0', 'center', SMALL, null); } }
-      if (G.paused) { ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, W, H); text('PAUSED', 320, 150, 24, '#ffd25a'); text('P / pause to resume   Esc / back to quit', 320, 190, 8, '#fff6e0'); btn(0, 0, W, H, () => (G.paused = false)); }
+      if (G.paused) { ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(0, 0, W, H); text('PAUSED', 320, 104, 24, '#ffd25a'); btn(0, 0, W, H, () => {});
+        [['RESUME', () => (G.paused = false)], ['MOVE LIST', () => openMoveList(G.p1, 'pause')], ['QUIT', () => { G.paused = false; go('menu'); }]].forEach(([n, fn], i) => { const y = 150 + i * 38; panel(220, y - 14, 200, 28, i ? '#121a36' : '#3a2060', i ? '#4a4f8c' : '#ffd25a'); text(n, 320, y, 10, i ? '#fff6e0' : '#ffd25a'); btn(216, y - 18, 208, 36, fn); });
+        text('P resume  ·  I move list  ·  Esc quit', 320, 270, 7, '#9ab0d4', 'center', SMALL, null); }
       break; }
   }
   ctx.restore();
@@ -474,3 +577,4 @@ function fit() { const vw = innerWidth, vh = innerHeight, d = devicePixelRatio |
 addEventListener('resize', fit); fit();
 // 🏠 Back to Inu Verse hooks (kibble-pay mountHome): confirm mid-match, save first.
 globalThis.__inuHome = { busy: () => G.scr === 'fight' ? 'Leave this fight and go back to Inu Verse? The match is forfeited (rank kept).' : false };
+window.__mbUI = { openMoveList, startTrainer, trainerReset, trainerPick, ML }; // e2e/screenshot hooks (UI navigation only, no game-state cheats)

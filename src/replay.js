@@ -9,15 +9,22 @@ export class InputRecorder {
 }
 // online skins: the guest gets the alt palette when both picked the same fighter and skin (must match beginMatch exactly)
 export function onlineSkins(c0, c1, s0, s1) { return [s0, c0 === c1 && s0 === s1 ? (s0 === 'base' ? 'alt' : 'base') : s1]; }
-export function clipMatch(clip, makeMatch) {
+// rules: the ruleset the clip was recorded under (logic RULES by default; see clipRules for old clips)
+export function clipMatch(clip, makeMatch, rules = clip.rules) {
   const [a, b] = clip.players, [s0, s1] = onlineSkins(a.char, b.char, a.skin, b.skin);
-  return makeMatch(a.char, b.char, { o1: { skin: s0 }, o2: { skin: s1 }, seed: clip.seed });
+  return makeMatch(a.char, b.char, { o1: { skin: s0 }, o2: { skin: s1 }, seed: clip.seed, ...(rules ? { rules } : {}) });
 }
 // pad bytes for every tick of the clip
 export function* clipPads(clip) { const ins = clip.inputs; let i = 0; for (let t = 0; t < clip.ticks; t++) { while (i + 1 < ins.length && ins[i + 1][0] <= t) i++; yield [ins[i][1], ins[i][2]]; } }
 // step a match until `toTick` (or matchEnd); returns { m, report } where report is the resultReport at matchEnd
-export function replayTo(clip, { makeMatch, step }, toTick = clip.ticks) {
-  const m = clipMatch(clip, makeMatch); let report = null;
+export function replayTo(clip, { makeMatch, step }, toTick = clip.ticks, rules = clip.rules) {
+  const m = clipMatch(clip, makeMatch, rules); let report = null;
   for (const [b0, b1] of clipPads(clip)) { if (m.tick >= toTick) break; step(m, [decode(b0), decode(b1)]); m.events.length = 0; if (m.phase === 'matchEnd') { report = resultReport(m); break; } }
   return { m, report };
+}
+// Clips don't store a ruleset (server clip format v1). Clips recorded before the combo update (rules 1) only reproduce
+// their verified checksum under rules 1, so pick the newest ruleset whose full replay matches the stored checksum.
+export function clipRules(clip, fns, candidates = [2, 1]) {
+  for (const r of candidates) { const { report } = replayTo(clip, fns, clip.ticks, r); if (report && report.checksum === clip.checksum) return r; }
+  return null;
 }

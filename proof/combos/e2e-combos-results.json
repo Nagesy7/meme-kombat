@@ -1,0 +1,147 @@
+[
+  {
+    "name": "desktop: menu COMBO TRAINER -> select",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: I opens the Move List from select",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: D pages to the next fighter",
+    "pass": true,
+    "extra": "i=1"
+  },
+  {
+    "name": "desktop: T starts the Combo Trainer (frozen timer, dummy)",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: string drill completed with real key presses, steps all checked",
+    "pass": true,
+    "extra": "{\"i\":0,\"prog\":3,\"done\":true,\"clears\":1,\"dmg\":136,\"hits\":3,\"demo\":false,\"n\":3,\"name\":\"Press Briefing\"}"
+  },
+  {
+    "name": "desktop: pause -> MOVE LIST -> back returns to the paused fight",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "desktop: SHOW ME completes every drill",
+    "pass": true,
+    "extra": "Press Briefing:3h/136 Campaign Trail:2h/129 LK xx Red Tape Slide:2h/113 Launcher xx Veto Uppercut:2h/173 Press Briefing xx Super:4h/302"
+  },
+  {
+    "name": "desktop: no page errors",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "844x390: MOVE LIST button opens the move list, touch pad hidden",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "844x390: NEXT > pages fighter",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "844x390: COMBO TRAINER button starts the trainer",
+    "pass": true,
+    "extra": "croakley"
+  },
+  {
+    "name": "844x390: trainer mid-combo shows step progress",
+    "pass": true,
+    "extra": "{\"i\":4,\"prog\":3,\"done\":false,\"clears\":0,\"dmg\":162,\"hits\":3,\"demo\":true,\"n\":4,\"name\":\"Lily Hop Kicks xx Super\"}"
+  },
+  {
+    "name": "844x390: drill completes",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "844x390: trainer panels do not overlap touch or top buttons",
+    "pass": true,
+    "extra": "[]"
+  },
+  {
+    "name": "844x390: no page errors",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "750x342: MOVE LIST button opens the move list, touch pad hidden",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "750x342: NEXT > pages fighter",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "750x342: COMBO TRAINER button starts the trainer",
+    "pass": true,
+    "extra": "croakley"
+  },
+  {
+    "name": "750x342: trainer mid-combo shows step progress",
+    "pass": true,
+    "extra": "{\"i\":4,\"prog\":3,\"done\":false,\"clears\":0,\"dmg\":162,\"hits\":3,\"demo\":true,\"n\":4,\"name\":\"Lily Hop Kicks xx Super\"}"
+  },
+  {
+    "name": "750x342: drill completes",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "750x342: trainer panels do not overlap touch or top buttons",
+    "pass": true,
+    "extra": "[]"
+  },
+  {
+    "name": "750x342: no page errors",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "667x375: MOVE LIST button opens the move list, touch pad hidden",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "667x375: NEXT > pages fighter",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "667x375: COMBO TRAINER button starts the trainer",
+    "pass": true,
+    "extra": "croakley"
+  },
+  {
+    "name": "667x375: trainer mid-combo shows step progress",
+    "pass": true,
+    "extra": "{\"i\":4,\"prog\":3,\"done\":false,\"clears\":0,\"dmg\":162,\"hits\":3,\"demo\":true,\"n\":4,\"name\":\"Lily Hop Kicks xx Super\"}"
+  },
+  {
+    "name": "667x375: drill completes",
+    "pass": true,
+    "extra": ""
+  },
+  {
+    "name": "667x375: trainer panels do not overlap touch or top buttons",
+    "pass": true,
+    "extra": "[]"
+  },
+  {
+    "name": "667x375: no page errors",
+    "pass": true,
+    "extra": ""
+  }
+]

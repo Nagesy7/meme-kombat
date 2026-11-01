@@ -1,5 +1,6 @@
 // Online 1v1 client: matchmaking + signaling via kibble-pay /api/pvp (Vercel + Upstash), WebRTC data channel for inputs,
 // automatic fallback to the HTTP relay when a direct connection cannot be made. No wagering of any kind.
+import { RULES } from './moves.js';
 export const ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }];
 export const P2P_TIMEOUT_MS = 7000, DISCONNECT_MS = 10000;
 const cid = (() => { try { let c = sessionStorage.getItem('mb.cid'); if (!c) { c = Math.random().toString(36).slice(2, 12); sessionStorage.setItem('mb.cid', c); } return c; } catch { return Math.random().toString(36).slice(2, 12); } })();
@@ -72,9 +73,11 @@ export class OnlineSession {
     // the host decides the transport + input delay (p2p: 4 ticks ~67ms; relay: measured from ping RTT, 6..36 ticks) and tells the guest
     if (this.side === 0) { this.via = ok ? 'p2p' : 'relay'; this.delay = 4;
       if (this.via === 'relay') { const rtts = []; for (let i = 0; i < 3; i++) { this.rtt = null; this.send({ t: 'ping', ts: performance.now() }); for (let w = 0; w < 60 && this.rtt == null; w++) await sleep(50); if (this.rtt != null) rtts.push(this.rtt); }
-        const rtt = rtts.length ? rtts.sort((a, b) => a - b)[Math.floor(rtts.length / 2)] : 500; this.rttMs = Math.round(rtt); this.delay = Math.max(6, Math.min(36, Math.ceil(rtt / 16.7 / 2) + 4)); } this.send({ t: 'go', delay: this.delay, via: this.via }); }
+        const rtt = rtts.length ? rtts.sort((a, b) => a - b)[Math.floor(rtts.length / 2)] : 500; this.rttMs = Math.round(rtt); this.delay = Math.max(6, Math.min(36, Math.ceil(rtt / 16.7 / 2) + 4)); } this.send({ t: 'go', delay: this.delay, via: this.via, rules: RULES }); }
     else { const go = await new Promise((res) => { if (this.gotGo) return res(this.gotGo); this.handlers.push((m) => { if (m.t === 'go') res(m); }); });
       if (go.via === 'p2p' && opened) await Promise.race([opened, sleep(2000)]);
+      // both peers must run the same game rules or lockstep would desync: refuse early with a clear message (old host = no rules field = 1)
+      if ((go.rules ?? 1) !== RULES) { this.send({ t: 'bye' }); this.set('error', 'Version mismatch: your opponent has an older or newer Meme Brawl. Both refresh the page and try again.'); this.leave(); return; }
       this.delay = go.delay; this.via = go.via; }
     this.set('ready', `Connected (${this.via === 'p2p' ? 'WebRTC peer-to-peer' : 'server relay'})`);
     this.lastSeen = performance.now();
