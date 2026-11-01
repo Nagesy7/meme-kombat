@@ -135,6 +135,7 @@ function beginMatch() {
   else G.match = makeMatch(G.p1, G.p2, { o1: { skin: G.skin[0] }, o2, seed: Date.now() & 0xffff }); G.matchStart = Date.now(); G.fx = []; go('fight'); music(G.match.stage);
 }
 function matchOver() {
+  try { globalThis.InuProfile?.gameOver?.(); } catch {} // guests: Hall of Fame prompt (kibble-pay /inu-profile.js)
   const m = G.match, won = m.matchWinner === 0;
   if (G.mode === 'versus') return go('gameover');
   if (G.mode === 'ranked') { const before = K.profile().rating, p = K.recordRanked(G.rankOpp.rating, won); G.lastRank = { won, before, after: p.rating, opp: G.rankOpp };
