@@ -73,8 +73,8 @@ export async function initKibble(apiBase = 'https://kibble-pay.vercel.app') {
   const K = await glue.initKibble({ game: GAME, apiBase }); mode = K.mode; glue.mountFooter(K.mode);
   // Connect Wallet (title + in-game): practice ladder rating saved to the wallet; holder alts read the real on-chain balance.
   glue.mountHome?.(); // 🏠 Back to Inu Verse (title/pause/results; confirms + saves via globalThis.__inuHome)
-  if (K.kp) walletUi = glue.mountWallet(K, { game: GAME, keys: ['mb.rank'], position: 'top-right',
-    progress: (g) => { try { const r = JSON.parse(g('mb.rank') || 'null'); return r ? (r.w || 0) * 10 + (r.l || 0) : 0; } catch { return 0; } },
+  if (K.kp) walletUi = glue.mountWallet(K, { game: GAME, keys: ['mb.rank', 'mb.daily'], position: 'top-right', // mb.daily = Daily Paw badges (cosmetic) in the wallet cloud save
+    progress: (g) => { let p = 0; try { const r = JSON.parse(g('mb.rank') || 'null'); p += r ? (r.w || 0) * 10 + (r.l || 0) : 0; } catch {} try { p += (JSON.parse(g('mb.daily') || 'null')?.badges?.length || 0) * 5; } catch {} return p; },
     label: (g) => { try { const r = JSON.parse(g('mb.rank') || 'null'); return r ? `Elo ${r.rating} · ${r.w}W ${r.l}L` : ''; } catch { return ''; } },
     onWallet: (w) => { try { dispatchEvent(new CustomEvent('mb:wallet', { detail: w })); } catch {} } });
   if (K.kp) { wallet = new KibblePayAdapter(K.kp); refreshServer(K.kp).catch(() => {}); }

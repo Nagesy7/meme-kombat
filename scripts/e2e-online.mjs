@@ -34,7 +34,7 @@ async function tapCanvas(pg, x, y) { const r = await pg.locator('#game').boundin
 // navigate title -> menu -> ONLINE 1V1 -> option -> lock in fighter (keyboard on desktop, taps on phone)
 async function goOnline(pg, opt, fighter = 0) {
   await pg.goto(URL + '?' + pg.extra); await pg.waitForTimeout(800);
-  if (pg.touch) { await tapCanvas(pg, 320, 200); await waitScr(pg, 'menu'); await tapCanvas(pg, 320, 168); await waitScr(pg, 'online'); await tapCanvas(pg, 320, 84 + opt * 40); await waitScr(pg, 'select');
+  if (pg.touch) { await tapCanvas(pg, 320, 200); await waitScr(pg, 'menu'); { const r = await pg.evaluate(() => window.__mbUI.menuRect(2)); await tapCanvas(pg, r.x + r.w / 2, r.y + r.h / 2); } await waitScr(pg, 'online'); await tapCanvas(pg, 320, 84 + opt * 40); await waitScr(pg, 'select');
     await tapCanvas(pg, 0, 0); const x0 = 320 - (5 * 76) / 2 + 3; await tapCanvas(pg, x0 + (fighter % 5) * 76 + 35, 38 + Math.floor(fighter / 5) * 68 + 30); await tapCanvas(pg, x0 + (fighter % 5) * 76 + 35, 38 + Math.floor(fighter / 5) * 68 + 30); }
   else { await press(pg, 'Enter'); await waitScr(pg, 'menu'); for (let i = 0; i < 2; i++) await press(pg, 'KeyS'); await press(pg, 'Enter'); await waitScr(pg, 'online');
     for (let i = 0; i < opt; i++) await press(pg, 'KeyS'); await press(pg, 'Enter'); await waitScr(pg, 'select'); await pg.waitForTimeout(300);

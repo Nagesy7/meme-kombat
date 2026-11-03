@@ -53,3 +53,23 @@ Zachary's call: once adopted this is the **only** touch layout (no toggle, no UR
 - **Combo Trainer:** main menu → COMBO TRAINER. It runs a dummy with infinite HP, a frozen timer, and an input display. Each drill has per-step checkmarks; SHOW ME plays the drill as input; RESET; Q/E or 1–5 to switch drills. It pays no $KIBBLE and records no scores.
 - **Tests:** `tests/combos.test.js` runs every drill from raw pads for all fighters and checks the damage against `comboDamage`. It also covers stick motions on both facings, the cancel rules, low/overhead blocking, Move List vs data, lockstep determinism, and replay ruleset detection. `scripts/e2e-combos.mjs` (part of `npm run e2e`) checks the keyboard path at 1280x800 and the touch path at 844x390, 750x342 and 667x375.
 - **Known:** at max range, LK xx low slide can whiff for Bonkus, Toot Lord and Boomer Bob (the drills start close enough). The pre-existing kibble-pay guest pill sits over the bottom-centre hint text.
+
+## Feel more alive: stage life, ambience, daily challenge, verified-wins feed
+- **Render-only by design.** `src/ambient.js` reads the sim's `m.events` after `step()` (hit, super, finisher, ko), uses its own LCG (never `Math.random` or the match RNG) and draws in the frame loop. It never writes sim state, inputs, `RULES` or replay data. `tests/alive.test.js` plays CPU matches on all 5 stages with the crowd, details and daily tracking on (events deep-frozen) and off. The per-tick `stateHash` and `resultReport` checksums match exactly.
+- **Per stage (original pixel art):**
+  - **Kibble Mall:** shiba crowd with glow sticks; a blimp with a blinking banner; shoppers strolling; the sign flickers.
+  - **Pump Chart Canyon:** pup crowd waving flags; vultures circling; a tumbleweed; the live candle wiggles.
+  - **Moon Temple:** astro crowd in low-gravity hops; a rocket launches with a trail; a satellite.
+  - **Liquidity Pond:** frog crowd; ripples; dragonflies; a fish jumps.
+  - **Rug Den:** whale crowd holding cash; sweeping spotlights; gold glints; coins rain on big hits.
+  - **On every stage:** the crowd bobs on idle and cheers near hits (more on heavies and 3+ hit combos). On a KO or finisher, everyone jumps and 70 confetti particles fall.
+- **Effects levels:** EFFECTS chip on the menu (AUTO / FULL / LOW), saved in `mb.fx`. AUTO drops to LOW on `prefers-reduced-motion` or when a 180-frame average frame time goes over 24 ms in a fight, and shows a toast when it does. LOW draws half the crowd with no bobbing, no confetti, slower details, and caps screen shake at 3 px. `?fx=off|low|full` forces a level for testing.
+- **Sound:** `mb.audio = {muted, vol}` persists. The 🔊 button or `M` toggles mute; the SOUND chip or `-` / `=` steps volume through 100/75/50/25%. Each stage has a synthesized ambience bed plus a crowd murmur that swells with hype, and cheers on big hits and KOs. Music is mixed lower under ambience. Everything is WebAudio synthesis (no audio files) and nothing starts before the first key, tap or click.
+- **Daily challenge (`src/daily.js`):** picked by Sydney date (`Intl`, Australia/Sydney): `CHALLENGES[dayIndex mod 7]`, plus a fighter for WIN AS X. The challenges are WIN AS X, LOW SLIDE PARTY (3 low slides), SURVIVAL RUN (3 CPU wins back-to-back), OVERHEAD DROP (2), COMBO CHEF (4-hit combo), NO SCRATCHES (perfect round) and BAG METER DUMP (2 supers).
+  - Only Arcade and Practice Ladder (CPU) count.
+  - The reward is a cosmetic Daily Paw badge: Bronze from 1, Silver from 7, Gold from 30. It is stored in `mb.daily` and synced with the wallet cloud save (game `meme-brawl`). No $KIBBLE, no server grant, no fees.
+- **Activity feed (`src/feed.js`):** reads kibble-pay's public `GET /api/pvp?action=clips`. Clips exist only for server-verified ranked matches between two distinct non-test wallets with matching input uploads. The client also drops unverified or unranked clips, clips with a TEST_WALLETS player, and anything older than 7 days.
+  - Each row shows the winner's short wallet, the fighter and how long ago.
+  - With no data it says "No ranked wins yet today. Be the first!", and it shows an offline state on errors. It never shows placeholder rows.
+  - No new endpoint was needed.
+- **Menu layout:** two columns placed clear of the phone touch controls, the wallet pill and the top-right buttons. `scripts/e2e-alive.mjs` measures this at 667x375, 750x342, 844x390 and 1280x800.

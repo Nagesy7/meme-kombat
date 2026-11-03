@@ -2,7 +2,10 @@ import { ROSTER, BOSS, byId, STAGES } from './roster.js';
 import { makeMatch, step, cpuInput, W, ROUND_FRAMES } from './logic.js';
 import { sprite, poseFor, SKINS } from './sprites.js';
 import { stageCanvas, stageFx } from './stages.js';
-import { unlock, sfx, music, setMuted, isMuted } from './audio.js';
+import { unlock, sfx, music, setMuted, isMuted, ambience, cheer, setHype, cycleVolume, setVolume, getVolume, VOLUME_STEPS, audioStarted } from './audio.js';
+import { createAmbient, ambientEvent, ambientTick, drawAmbientBack, drawAmbientCrowd, drawAmbientFront, fxMonitor, fxLevel, FX_PREFS } from './ambient.js';
+import { sydneyDate, dailyFor, forToday, dailyEvent, dailyMatchEnd, badgeTier, DAILY_KEY } from './daily.js';
+import { feedRows, fetchClips, EMPTY_TEXT } from './feed.js';
 import * as K from './kibble.js';
 import { Lockstep, stateHash, resultReport, encode, decode } from './netcode.js';
 import { InputRecorder, onlineSkins, clipMatch, clipPads, clipRules } from './replay.js';
@@ -17,6 +20,18 @@ const TOUCH = () => document.body.classList.contains('touch') && innerWidth > in
 const H = 360, GY = 318, FONT = '"Press Start 2P", monospace', SMALL = 'Silkscreen, monospace';
 const G = { scr: 'title', t: 0, mode: 'arcade', sel: [0, 1], skinIdx: [0, 0], ready: [false, false], match: null, ladder: [], li: 0, fx: [], shake: 0, menuI: 0, msg: '', owned: ['base'], holder: false, cpuLevel: 0.5, rankOpp: null, lastRank: null, shopI: 0, onI: 0, paused: false };
 window.__mb = G;
+// ---- ambient life / effects level / daily challenge / activity feed (all outside the sim) ----
+const FXQ = QS.get('fx'), RMQ = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null, FXM = fxMonitor();
+const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+G.fxPref = FX_PREFS.includes(lsGet('mb.fx', 'auto')) ? lsGet('mb.fx', 'auto') : 'auto';
+const FX = () => fxLevel(G.fxPref, { reducedMotion: !!RMQ?.matches, autoLow: FXM.autoLow, forced: FXQ });
+G.menuAmb = null; G.amb = null; G.toast = null;
+function toast(t, dur = 180) { G.toast = { text: t, t: dur }; }
+function dailyNow() { const key = sydneyDate(); const ch = dailyFor(key); G.daily = forToday(G.daily || lsGet(DAILY_KEY, null), key); return ch; }
+function dailySave() { lsSet(DAILY_KEY, G.daily); }
+G.feed = { rows: [], state: 'idle', at: 0, err: '' };
+function refreshFeed(force = false) { const F = G.feed; if (F.state === 'loading' || (!force && Date.now() - F.at < 60000 && F.state !== 'idle')) return; F.state = 'loading';
+  fetchClips(API).then((clips) => { F.clips = clips; F.rows = feedRows(clips, Date.now()); F.state = 'ok'; F.err = ''; }).catch((e) => { F.state = 'error'; F.err = String(e.message || e); }).finally(() => { F.at = Date.now(); }); }
 
 // ---------------- input ----------------
 const pads = [{}, {}], prevPads = [{}, {}], touchPad = {};
@@ -24,7 +39,7 @@ const KEY1 = { KeyW: 'u', KeyS: 'd', KeyA: 'l', KeyD: 'r', KeyF: 'lp', KeyG: 'hp
 const KEY2 = { ArrowUp: 'u', ArrowDown: 'd', ArrowLeft: 'l', ArrowRight: 'r', KeyK: 'lp', KeyL: 'hp', Comma: 'lk', Period: 'hk' };
 const held = new Set(), tapped = new Set(), touchTap = {};
 addEventListener('keydown', (e) => { unlock(); if (KEY1[e.code] || KEY2[e.code] || e.code === 'Space') e.preventDefault(); if (e.repeat) return; held.add(e.code); tapped.add(e.code);
-  if (e.code === 'Enter' || e.code === 'Space') menuKey('ok'); if (e.code === 'Escape' || e.code === 'Backspace') menuKey('back'); if (e.code === 'KeyM') setMuted(!isMuted()); if (e.code === 'KeyP' && G.scr === 'fight' && G.mode !== 'online') G.paused = !G.paused; hotKey(e.code); });
+  if (e.code === 'Enter' || e.code === 'Space') menuKey('ok'); if (e.code === 'Escape' || e.code === 'Backspace') menuKey('back'); if (e.code === 'KeyM') { setMuted(!isMuted()); syncMuteBtn(); } if (e.code === 'Minus' || e.code === 'Equal') { const i = VOLUME_STEPS.indexOf(getVolume()); setVolume(VOLUME_STEPS[Math.max(0, Math.min(VOLUME_STEPS.length - 1, (i < 0 ? 0 : i) + (e.code === 'Minus' ? 1 : -1)))]); toast(`VOLUME ${Math.round(getVolume() * 100)}%`, 60); } if (e.code === 'KeyP' && G.scr === 'fight' && G.mode !== 'online') G.paused = !G.paused; hotKey(e.code); });
 function hotKey(c) { // move list / trainer shortcuts (letters no fighter uses)
   if (c === 'KeyI') { if (G.scr === 'select') openMoveList(ROSTER[G.sel[0]].id, 'select'); else if (G.scr === 'fight' && G.mode !== 'online' && G.mode !== 'replay') { G.paused = true; openMoveList(G.p1, 'pause'); } }
   if (G.scr === 'movelist' && c === 'KeyT' && mlCanTrain()) startTrainer(ROSTER[ML.i].id);
@@ -85,7 +100,8 @@ function dimControls() { const on = G.scr === 'fight' && TOUCH() && G.match, r =
   const boxes = on ? G.match.f.map((f) => ({ x0: r.left + (f.x - 30) * s, x1: r.left + (f.x + 30) * s, y1: r.top + (GY - f.y) * s, y0: r.top + (GY - f.y - 116) * s })) : [];
   for (const el of CTRLS) { const b = el.getBoundingClientRect(), hit = boxes.some((f) => b.left < f.x1 && b.right > f.x0 && b.top < f.y1 && b.bottom > f.y0); if (el.classList.contains('under') !== hit) el.classList.toggle('under', hit); } }
 document.getElementById('pauseBtn').addEventListener('click', () => { unlock(); if (G.scr === 'fight') G.paused = !G.paused; else menuKey('back'); });
-document.getElementById('muteBtn').addEventListener('click', (e) => { unlock(); setMuted(!isMuted()); e.target.textContent = isMuted() ? '🔇' : '🔊'; });
+const muteBtn = document.getElementById('muteBtn'), syncMuteBtn = () => { muteBtn.textContent = isMuted() ? '🔇' : '🔊'; muteBtn.setAttribute('aria-pressed', String(isMuted())); };
+muteBtn.addEventListener('click', () => { unlock(); setMuted(!isMuted()); syncMuteBtn(); }); syncMuteBtn(); // saved setting (mb.audio)
 for (const ev of ['gesturestart', 'dblclick', 'contextmenu', 'selectstart']) document.addEventListener(ev, (e) => e.preventDefault());
 document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
 
@@ -98,7 +114,8 @@ cv.addEventListener('pointerdown', (e) => { unlock(); const r = cv.getBoundingCl
 // ---------------- screens ----------------
 const MENU = [['ARCADE', () => { G.mode = 'arcade'; go('select'); }], ['VERSUS 2P', () => { G.mode = 'versus'; go('select'); }], ['ONLINE 1V1', () => go('online')], ['PRACTICE LADDER (CPU)', () => { G.mode = 'ranked'; go('select'); }], ['SKIN SHOP + WALLET', () => go('shop')], ['HOW TO PLAY', () => go('help')], ['COMBO TRAINER', () => { G.mode = 'trainer'; go('select'); }]];
 function go(s) { G.scr = s; G.t = 0; regions = []; G.ready = [false, false]; if (s !== 'lobby' && s !== 'versus' && s !== 'fight' && s !== 'onlineres' && G.net?.s && !G.net.s.closed) { G.net.s.leave(); G.net = null; }
-  if (s === 'menu' || s === 'online' || s === 'title' || s === 'select' || s === 'shop' || s === 'help') music('menu'); if (s === 'select') refreshOwned(); }
+  if (s === 'menu' || s === 'online' || s === 'title' || s === 'select' || s === 'shop' || s === 'help') music('menu'); if (s === 'select') refreshOwned();
+  if (s === 'fight') { G.amb = null; ambience(G.match?.stage); } else if (s !== 'versus') ambience(null); if (s === 'menu') { dailyNow(); refreshFeed(); } }
 async function refreshOwned() { const inv = K.wallet.address ? await K.wallet.inventory() : []; G.holder = await K.isHolder(); G.owned = ['base', ...(G.holder ? ['alt'] : []), ...inv.filter((x) => SKINS[x])]; G.bal = K.wallet.address ? (await K.wallet.balance()).ui : null; }
 function menuKey(k) {
   if (G.scr === 'title') { sfx('confirm'); return go('menu'); }
@@ -146,6 +163,7 @@ function beginMatch() {
 function matchOver() {
   try { globalThis.InuProfile?.gameOver?.(); } catch {} // guests: Hall of Fame prompt (kibble-pay /inu-profile.js)
   const m = G.match, won = m.matchWinner === 0;
+  if (G.mode === 'arcade' || G.mode === 'ranked') { const ch = dailyNow(); if (dailyMatchEnd(G.daily, ch, { won, p1: G.p1, mode: G.mode })) dailyDone(ch); else dailySave(); }
   if (G.mode === 'versus') return go('gameover');
   if (G.mode === 'ranked') { const before = K.profile().rating, p = K.recordRanked(G.rankOpp.rating, won); G.lastRank = { won, before, after: p.rating, opp: G.rankOpp };
     G.lastRank.posted = 'Practice vs CPU: never counts for prizes. Play ONLINE 1V1 ranked.'; return go('rankres'); }
@@ -203,7 +221,10 @@ function spawnFx(ev) {
   if (ev.type === 'ko') G.shake = 14;
   if (TOUCH() && navigator.vibrate && (ev.type === 'hit' || ev.type === 'block' || ev.type === 'ko')) try { navigator.vibrate(ev.type === 'ko' ? 60 : ev.type === 'block' ? 8 : ev.heavy ? 22 : 12); } catch {} // haptic hit feedback on phones
   sfx(ev.type === 'banner' ? 'banner' : ev.type, ev);
+  if (G.amb) { ambientEvent(G.amb, ev); setHype(G.amb.hype); if (ev.type === 'ko' || ev.type === 'finisher') cheer(true); else if (ev.type === 'hit' && (ev.heavy || ev.combo >= 3)) cheer(false); }
+  if (G.mode === 'arcade' || G.mode === 'ranked') { const ch = dailyNow(); if (dailyEvent(G.daily, ch, ev, G.mode)) dailyDone(ch); }
 }
+function dailyDone(ch) { dailySave(); sfx('coin'); toast(`DAILY DONE: ${ch.title} · DAILY PAW BADGE`, 240); }
 function drawFx() { for (const p of G.fx) { if (p.ring) { ctx.strokeStyle = '#fff6c0'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, p.r += 3, 0, 7); ctx.stroke(); } else { p.x += p.vx; p.y += p.vy; p.vy += 0.2; ctx.fillStyle = p.col; ctx.fillRect(Math.round(p.x), Math.round(p.y), p.s, p.s); } p.life--; } G.fx = G.fx.filter((p) => p.life > 0); }
 function bar(x, y, w, h, frac, col, back = '#3a1420', flip = false) { ctx.fillStyle = '#1a1420'; ctx.fillRect(x - 2, y - 2, w + 4, h + 4); ctx.fillStyle = back; ctx.fillRect(x, y, w, h); const fw = Math.round(w * Math.max(0, frac)); ctx.fillStyle = col; ctx.fillRect(flip ? x + w - fw : x, y, fw, h); ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fillRect(flip ? x + w - fw : x, y, fw, 3); }
 function hud(m) {
@@ -265,11 +286,48 @@ function drawTitle() {
   if (Math.floor(G.t / 30) % 2) text('PRESS START / TAP', 320, 330, 12, '#fff6e0');
   text('Parody homage. Not affiliated with any token or game.', 320, 352, 6, '#9ab0d4', 'center', SMALL, null);
 }
+// Menu layout keeps clear of the phone touch controls (stick bottom-left, buttons bottom-right), the wallet pill (bottom centre)
+// and the DOM pause/sound buttons (top right): measured at 667x375, 750x342 and 844x390 in canvas units.
+const MENU_RECT = (i) => ({ x: 14, y: 36 + i * 31, w: 290, h: 26 });
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 function drawMenu() {
-  ctx.drawImage(stageCanvas('moon'), 0, 0); ctx.fillStyle = 'rgba(6,4,20,.6)'; ctx.fillRect(0, 0, W, H); text('MEME BRAWL', 320, 46, 24, '#ffd25a');
-  MENU.forEach(([n, fn], i) => { const y = 84 + i * 35, on = i === G.menuI; panel(170, y - 14, 300, 28, on ? '#3a2060' : '#121a36', on ? '#ffd25a' : '#4a4f8c'); text(n, 320, y, 12, on ? '#ffd25a' : '#fff6e0'); btn(170, y - 16, 300, 32, () => { G.menuI = i; fn(); }); });
-  drawSprite(byId('inu'), 'win', 'base', 90, 330, 2.2, 1); drawSprite(BOSS, 'idle', 'base', 560, 330, 2.2, -1);
-  const p = K.profile(); text(`RANK ${p.rating} ELO  ${K.wallet.address ? 'WALLET ' + K.wallet.address.slice(0, 4) + '..' + K.wallet.address.slice(-4) : 'NO WALLET'}${K.wallet.simulated ? ' (SIM)' : ''}`, 320, 340, 7, '#9ab0d4');
+  const lvl = FX(); ctx.drawImage(stageCanvas('moon'), 0, 0); if (!G.menuAmb) G.menuAmb = createAmbient('moon', 3); drawAmbientBack(ctx, G.menuAmb, lvl); drawAmbientCrowd(ctx, G.menuAmb, lvl);
+  ctx.fillStyle = 'rgba(6,4,20,.62)'; ctx.fillRect(0, 0, W, H); text('MEME BRAWL', 159, 20, 16, '#ffd25a');
+  MENU.forEach(([n, fn], i) => { const r = MENU_RECT(i), on = i === G.menuI; panel(r.x, r.y, r.w, r.h, on ? '#3a2060' : '#121a36', on ? '#ffd25a' : '#4a4f8c'); text(n, r.x + r.w / 2, r.y + 13, 10, on ? '#ffd25a' : '#fff6e0'); btn(r.x - 2, r.y - 2, r.w + 4, r.h + 4, () => { G.menuI = i; fn(); }); });
+  // sound + effects settings (also: M mutes, - and = change volume)
+  const vol = isMuted() ? 'MUTED' : `${Math.round(getVolume() * 100)}%`, fxs = G.fxPref === 'auto' ? `AUTO·${FX() === 'full' ? 'FULL' : 'LOW'}` : G.fxPref.toUpperCase();
+  panel(100, 256, 88, 20, '#121a36', '#4a4f8c'); text(`SOUND ${vol}`, 144, 266, 7, '#fff6e0', 'center', SMALL, null); btn(98, 254, 92, 24, () => { unlock(); cycleVolume(); syncMuteBtn(); });
+  panel(194, 256, 110, 20, '#121a36', '#4a4f8c'); text(`EFFECTS ${fxs}`, 249, 266, 7, '#fff6e0', 'center', SMALL, null); btn(192, 254, 114, 24, () => { G.fxPref = FX_PREFS[(FX_PREFS.indexOf(G.fxPref) + 1) % FX_PREFS.length]; lsSet('mb.fx', G.fxPref); });
+  const p = K.profile(); text(`RANK ${p.rating} ELO · ${K.wallet.address ? 'WALLET ' + K.wallet.address.slice(0, 4) + '..' + K.wallet.address.slice(-4) : 'NO WALLET'}${K.wallet.simulated ? ' (SIM)' : ''}`, 202, 290, 7, '#9ab0d4', 'center', SMALL, null);
+  text('Feed: kibble-pay verified ranked results', 202, 304, 6, '#6a7aa4', 'center', SMALL, null);
+  drawDaily(312, 36); drawFeed(312, 108); drawBadges(312, 190);
+}
+function drawDaily(x, y) {
+  const ch = dailyNow(), D = G.daily, w = 314, done = D.done, [, mm, dd] = ch.date.split('-'), prog = Math.min(ch.target, D.prog);
+  panel(x, y, w, 66, '#121a36', done ? '#3ec46a' : '#ffd25a');
+  text(`DAILY CHALLENGE · ${+dd} ${MONTHS[+mm - 1]} (SYDNEY)`, x + 8, y + 9, 7, '#9ab0d4', 'left', SMALL, null);
+  text(ch.title, x + 8, y + 24, 10, done ? '#3ec46a' : '#ffd25a', 'left');
+  text(ch.desc, x + 8, y + 39, 7, '#fff6e0', 'left', SMALL, null);
+  bar(x + 8, y + 50, 150, 7, prog / ch.target, done ? '#3ec46a' : '#ffd25a', '#2a2040');
+  text(done ? 'DONE! BADGE EARNED' : `${prog}/${ch.target} · ARCADE OR LADDER`, x + 166, y + 54, 7, done ? '#3ec46a' : '#fff6e0', 'left', SMALL, null);
+}
+const charName = (id) => (byId(id)?.name || id || '?').toUpperCase();
+// wallet addresses use a monospace font: case matters and the pixel font is caps-only
+function drawFeed(x, y) {
+  const F = G.feed, w = 314; refreshFeed(); panel(x, y, w, 76, '#121a36', '#4a4f8c');
+  text('RECENT VERIFIED RANKED WINS', x + 8, y + 9, 7, '#ffd25a', 'left', SMALL, null); text(F.state === 'ok' ? 'LIVE' : F.state === 'error' ? 'OFFLINE' : '...', x + w - 8, y + 9, 7, F.state === 'ok' ? '#3ec46a' : '#9ab0d4', 'right', SMALL, null);
+  if (F.state === 'ok' && F.rows.length) F.rows.slice(0, 3).forEach((r, i) => { const ry = y + 26 + i * 16; ctx.fillStyle = i % 2 ? 'rgba(255,255,255,.03)' : 'rgba(255,255,255,.08)'; ctx.fillRect(x + 4, ry - 7, w - 8, 15);
+    text(r.short, x + 10, ry, 9, '#7ad3f0', 'left', 'ui-monospace, Menlo, monospace', null); text(`won as ${charName(r.char)}`, x + 92, ry, 7, '#fff6e0', 'left', SMALL, null); text(r.ago, x + w - 10, ry, 7, '#9ab0d4', 'right', SMALL, null); });
+  else { const msg = F.state === 'error' ? ['Feed offline: results server unreachable.', 'Showing nothing rather than guessing.'] : F.state === 'ok' ? [EMPTY_TEXT, 'ONLINE 1V1 > RANKED QUICK MATCH'] : ['Loading verified results...', '']; 
+    msg.forEach((t, i) => text(t, x + w / 2, y + 34 + i * 16, 7, i ? '#9ab0d4' : '#fff6e0', 'center', SMALL, null)); }
+}
+function drawBadges(x, y) {
+  const n = G.daily.badges.length, tier = badgeTier(n), col = tier ? (tier.startsWith('GOLD') ? '#ffd25a' : tier.startsWith('SILVER') ? '#d8dce8' : '#e39a5a') : '#4a4f8c';
+  panel(x, y, 156, 58, '#121a36', '#4a4f8c');
+  ctx.fillStyle = col; ctx.fillRect(x + 14, y + 24, 14, 12); [[x + 10, y + 16], [x + 16, y + 12], [x + 24, y + 12], [x + 30, y + 16]].forEach(([px, py]) => ctx.fillRect(px, py, 5, 6)); // pixel paw
+  text('DAILY PAW BADGES', x + 42, y + 12, 7, '#ffd25a', 'left', SMALL, null);
+  text(`x${n} ${tier || ''}`.trim(), x + 42, y + 28, 8, '#fff6e0', 'left');
+  text('Cosmetic only. No $KIBBLE.', x + 8, y + 48, 6, '#9ab0d4', 'left', SMALL, null);
 }
 function drawSelect() {
   ctx.drawImage(stageCanvas('canyon'), 0, 0); ctx.fillStyle = 'rgba(6,4,20,.7)'; ctx.fillRect(0, 0, W, H);
@@ -441,7 +499,8 @@ function drawShop() {
 
 // ---------------- loop ----------------
 function update() {
-  readPads(); G.t++; const scr = G.scr;
+  readPads(); G.t++; const scr = G.scr; if (G.toast && --G.toast.t <= 0) G.toast = null;
+  if (scr === 'fight' && G.amb && !G.paused) ambientTick(G.amb, FX()); else if (scr === 'menu' && G.menuAmb) ambientTick(G.menuAmb, FX());
   if (scr !== 'fight') { updateMenus(scr); return; }
   updateFight();
 }
@@ -540,17 +599,18 @@ function drawOnlineRes() {
   drawEnd(title, lines, won ? '#3ec46a' : why === 'desync' ? '#ffd25a' : '#ff5a5a');
 }
 function render() {
-  regions = []; ctx.save(); if (G.shake > 0) ctx.translate(Math.round((Math.random() - 0.5) * G.shake), Math.round((Math.random() - 0.5) * G.shake)); /* integer offsets (no subpixel blur); decays per sim step, not per rendered frame (was 2x longer/shorter at 30/120Hz) */
+  regions = []; ctx.save(); if (G.shake > 0 && FX() !== 'full') G.shake = Math.min(G.shake, 3); if (G.shake > 0) ctx.translate(Math.round((Math.random() - 0.5) * G.shake), Math.round((Math.random() - 0.5) * G.shake)); /* integer offsets (no subpixel blur); decays per sim step, not per rendered frame (was 2x longer/shorter at 30/120Hz) */
   switch (G.scr) {
     case 'title': drawTitle(); break; case 'menu': drawMenu(); break; case 'select': drawSelect(); break; case 'versus': drawVersus(); break; case 'ladder': drawLadder(); break; case 'shop': drawShop(); break; case 'help': drawHelp(); break; case 'online': drawOnline(); break; case 'lobby': drawLobby(); break; case 'onlineres': drawOnlineRes(); break; case 'movelist': drawMoveList(); break;
     case 'gameover': drawEnd(G.mode === 'versus' ? `${G.match.f[G.match.matchWinner].ch.name.toUpperCase()} WINS` : 'GOT RUGGED', G.mode === 'versus' ? ['GG. Rematch from the menu.'] : ['The ladder humbled you.', 'Diamond paws. Try again.'], '#ff5a5a'); break;
     case 'ending': drawEnd('LADDER CLEARED', [`${byId(G.p1).name} rugged Lord Rugsworth.`, 'The Kibble Verse is safe. Wen sequel.'], '#ffd25a'); drawSprite(byId(G.p1), Math.floor(G.t / 20) % 2 ? 'win' : 'win2', G.skin[0], 320, 300, 2.4, 1); break;
     case 'rankres': { const r = G.lastRank; drawEnd(r.won ? 'RANKED WIN' : 'RANKED LOSS', [`vs ${r.opp.name}`, `ELO ${r.before} -> ${r.after} (${r.after - r.before >= 0 ? '+' : ''}${r.after - r.before})`, `Current rank #${K.leaderboard().find((e) => e.you).rank}`, ...(r.posted ? [r.posted] : [])], r.won ? '#3ec46a' : '#ff5a5a'); break; }
     case 'fight': {
-      const m = G.match; ctx.drawImage(stageCanvas(m.stage), 0, 0); stageFx(ctx, m.stage, m.tick);
+      const m = G.match, lvl = FX(); ctx.drawImage(stageCanvas(m.stage), 0, 0); stageFx(ctx, m.stage, m.tick);
+      if (!G.amb || G.amb.stage !== m.stage) G.amb = createAmbient(m.stage, m.seed || 1); drawAmbientBack(ctx, G.amb, lvl); drawAmbientCrowd(ctx, G.amb, lvl);
       if (m.phase === 'finisher' || m.phase === 'finish') { ctx.fillStyle = `rgba(20,0,10,${Math.min(0.5, m.pt / 60)})`; ctx.fillRect(0, 0, W, H); }
       const order = [...m.f].sort((a, b) => (a.st === 'attack' ? 1 : 0) - (b.st === 'attack' ? 1 : 0)); for (const f of order) fighterDraw(f, m);
-      for (const p of m.proj) drawProj(p, m.tick); if (m.finisher) finisherOverlay(m); drawFx(); if (G.mode === 'trainer') trainerHud(m); else hud(m);
+      for (const p of m.proj) drawProj(p, m.tick); if (m.finisher) finisherOverlay(m); drawFx(); drawAmbientFront(ctx, G.amb, lvl); if (G.mode === 'trainer') trainerHud(m); else hud(m);
       for (const f of m.f) if (f.st === 'attack' && f.move?.special && f.move.name !== 'super' && f.t < 40) text(f.move.special.toUpperCase(), Math.max(70, Math.min(570, f.x)), GY - f.y - 128, 7, f.move.name === 'super' ? '#ff5aa8' : '#fff6e0'); // special name callout
       if (G.mode === 'replay' && G.clip) { const c = G.clip.c; text('CLIP REPLAY · VERIFIED' + (c.bracket ? ' BRACKET' : ' RANKED') + ' 1V1', 320, 342, 6, '#ffd25a', 'center', SMALL, null); text(c.players[0].short || '', 60, 58, 6, '#9ab0d4', 'left', SMALL, null); text(c.players[1].short || '', 580, 58, 6, '#9ab0d4', 'right', SMALL, null); }
       if (G.mode === 'online' && G.net) { const N = G.net; text(N.s.side ? 'YOU' : 'YOU', N.s.side ? 580 : 60, 58, 7, '#3ec46a', N.s.side ? 'right' : 'left'); text(`${N.s.via === 'p2p' ? 'P2P' : 'RELAY'} D${N.s.delay}`, 320, 46, 6, '#9ab0d4', 'center', SMALL, null);
@@ -561,12 +621,14 @@ function render() {
       break; }
   }
   ctx.restore();
+  if (G.toast) { const a = Math.min(1, G.toast.t / 20); ctx.globalAlpha = a; panel(120, 300, 400, 22, '#3a2060', '#ffd25a'); text(G.toast.text, 320, 311, 7, '#ffd25a', 'center', SMALL, null); ctx.globalAlpha = 1; }
 }
 let acc = 0, last = performance.now();
 // vsync snap: rAF timestamps wobble +-1-2ms; a raw 16.67ms accumulator ran 0 or 2 updates on many frames (stutter). Snap to whole 60Hz frames.
 export function snapMs(ms) { const k = Math.round(ms / (1000 / 60)); return k >= 1 && Math.abs(ms - k * 1000 / 60) < 2 ? k * 1000 / 60 : ms; }
-function frame(now) { acc += snapMs(Math.min(100, now - last)); last = now; let n = 0; while (acc >= 1000 / 60 - 1e-3 && n < 5) { update(); acc = Math.max(0, acc - 1000 / 60); n++; if (G.shake > 0) { G.shake *= 0.85; if (G.shake < 0.5) G.shake = 0; } }
-  (window.__stepHist ||= {})[n] = (window.__stepHist[n] || 0) + 1; /* jitter probe */ render(); dimControls(); syncVaultLink(); requestAnimationFrame(frame); }
+function frame(now) { if (FXM.frame(now - last, G.scr === 'fight' && !G.paused && G.fxPref === 'auto' && !document.hidden)) toast('REDUCED EFFECTS ON (LOW FRAME RATE)', 150);
+  acc += snapMs(Math.min(100, now - last)); last = now; let n = 0; while (acc >= 1000 / 60 - 1e-3 && n < 5) { update(); acc = Math.max(0, acc - 1000 / 60); n++; if (G.shake > 0) { G.shake *= 0.85; if (G.shake < 0.5) G.shake = 0; } }
+  (window.__stepHist ||= {})[n] = (window.__stepHist[n] || 0) + 1; /* jitter probe */ { const r0 = performance.now(); render(); const P = (window.__perf ||= { n: 0, ms: 0, max: 0 }); const d = performance.now() - r0; P.n++; P.ms += d; if (d > P.max) P.max = d; } dimControls(); syncVaultLink(); requestAnimationFrame(frame); }
 document.fonts?.load(`16px ${FONT}`).finally(() => requestAnimationFrame(frame));
 if (!document.fonts) requestAnimationFrame(frame);
 const kp = new URLSearchParams(location.search).get('kibble'); if (QS.get('clip')) startClip(QS.get('clip')); else if (QS.get('room')) { G.joinCode = QS.get('room').toUpperCase(); G.onKind = 'join'; G.onRanked = false; G.mode = 'online'; G.scr = 'select'; }
@@ -577,4 +639,4 @@ function fit() { const vw = innerWidth, vh = innerHeight, d = devicePixelRatio |
 addEventListener('resize', fit); fit();
 // 🏠 Back to Inu Verse hooks (kibble-pay mountHome): confirm mid-match, save first.
 globalThis.__inuHome = { busy: () => G.scr === 'fight' ? 'Leave this fight and go back to Inu Verse? The match is forfeited (rank kept).' : false };
-window.__mbUI = { openMoveList, startTrainer, trainerReset, trainerPick, ML }; // e2e/screenshot hooks (UI navigation only, no game-state cheats)
+window.__mbUI = { openMoveList, startTrainer, trainerReset, trainerPick, ML, menuRect: (i) => MENU_RECT(i), fxLevel: () => FX(), fxMon: FXM, refreshFeed, dailyNow, audioStarted }; // e2e/screenshot hooks (UI navigation + read-only state, no game-state cheats)

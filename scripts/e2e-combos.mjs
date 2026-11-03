@@ -49,7 +49,7 @@ for (const [w, h] of [[844, 390], [750, 342], [667, 375]]) {
   const ctx = await b.newContext({ ...devices['iPhone 13 landscape'], viewport: { width: w, height: h } }), pg = await ctx.newPage(), errs = []; pg.on('pageerror', (e) => errs.push(e.message));
   await pg.goto(URL + '?demo=1'); await pg.waitForTimeout(800);
   await tapGame(pg, 320, 200); await waitScr(pg, 'menu'); await pg.waitForTimeout(150);
-  await tapGame(pg, 320, 84 + 6 * 35); await waitScr(pg, 'select'); await pg.waitForTimeout(150);
+  { const r = await pg.evaluate(() => window.__mbUI.menuRect(6)); await tapGame(pg, r.x + r.w / 2, r.y + r.h / 2); } await waitScr(pg, 'select'); await pg.waitForTimeout(150);
   await tapGame(pg, 56, 16); await waitScr(pg, 'movelist'); await pg.waitForTimeout(300);
   ok(`${w}x${h}: MOVE LIST button opens the move list, touch pad hidden`, await pg.evaluate(() => getComputedStyle(document.getElementById('touch')).display === 'none'));
   await pg.screenshot({ path: `${OUT}/movelist-${w}x${h}.png` });

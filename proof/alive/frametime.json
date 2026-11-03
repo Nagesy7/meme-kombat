@@ -1,0 +1,26 @@
+{
+ "on": {
+  "render": 0.22,
+  "renderMax": 4,
+  "frameMedian": 16.7,
+  "frameP95": 16.8
+ },
+ "off": {
+  "render": 0.18,
+  "renderMax": 3,
+  "frameMedian": 16.7,
+  "frameP95": 16.7
+ },
+ "on-cpu4x": {
+  "render": 0.56,
+  "renderMax": 3.1,
+  "frameMedian": 16.7,
+  "frameP95": 16.8
+ },
+ "off-cpu4x": {
+  "render": 0.57,
+  "renderMax": 7.2,
+  "frameMedian": 16.7,
+  "frameP95": 16.8
+ }
+}
