@@ -104,3 +104,10 @@ Zachary's call: once adopted this is the **only** touch layout (no toggle, no UR
 - **Rumble:** `vibrationActuator.playEffect('dual-rumble')` on hit, block and KO when VIBRATION is on. Errors are swallowed.
 - **Art:** all glyphs are plain shapes and letters drawn on the canvas. No console logos or artwork.
 - **Tests:** `tests/gamepad.test.js` (unit) and `scripts/e2e-gamepad.mjs` (fake pads injected into `navigator.getGamepads`). Neither has been tried on real Bluetooth hardware yet.
+
+## Shop + For devs links (preview branch `shop-links-preview`, not live)
+- Main menu link row under the settings chips: "🛍️ Shop" (tooltip: "Optional cosmetics. $KIBBLE is never needed to play.") and "🛠️ For devs". Keyboard/pad focus slots 8 and 9 (up from ARCADE wraps to For devs; left/right toggles on the row); tap/click works too.
+- Results nudge after arcade/versus/CPU-ladder results only (gameover, ladder, ending, rankres), never online, trainer, pre-fight ladder or mid-fight. Once per session via sessionStorage['inu.shopNudge']. Focus starts on "Not now" so mashing through results never opens the shop.
+- Analytics: va('event',{name:'paid_link_click',data:{product,from,site:'meme-brawl'}}), no wallet, mint, name or score.
+- Links open in a new tab (opener cleared); if the popup is blocked, they open in the same tab.
+- Tests: tests/shoplinks.test.js and scripts/e2e-shop.mjs (`npm run e2e:shop`).

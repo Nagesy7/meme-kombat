@@ -3,6 +3,7 @@ import { makeMatch, step, cpuInput, W, ROUND_FRAMES } from './logic.js';
 import { sprite, poseFor, SKINS } from './sprites.js';
 import { stageCanvas, stageFx } from './stages.js';
 import { PadManager, PadPlayer, readGamepad, loadMap, saveMap, resetMap, remap, normMap, label as padLabel, ACTIONS as PAD_ACTIONS, ACTION_NAME, ACTION_SHORT, FAMILY_NAME, REMAPPABLE, btnWord } from './gamepad.js';
+import { COPY as SHOP_COPY, SHOP_URL, DEVS_URL, trackPaid, shouldNudge, markNudge, openLink } from './shoplinks.js';
 import { unlock, sfx, music, setMuted, isMuted, ambience, cheer, setHype, cycleVolume, setVolume, getVolume, VOLUME_STEPS, audioStarted } from './audio.js';
 import { createAmbient, ambientEvent, ambientTick, drawAmbientBack, drawAmbientCrowd, drawAmbientFront, fxMonitor, fxLevel, FX_PREFS } from './ambient.js';
 import { sydneyDate, dailyFor, forToday, dailyEvent, dailyMatchEnd, badgeTier, DAILY_KEY } from './daily.js';
@@ -203,13 +204,16 @@ cv.addEventListener('pointerdown', (e) => { unlock(); const r = cv.getBoundingCl
 
 // ---------------- screens ----------------
 const MENU = [['ARCADE', () => { G.mode = 'arcade'; go('select'); }], ['VERSUS 2P', () => { G.mode = 'versus'; go('select'); }], ['ONLINE 1V1', () => go('online')], ['PRACTICE LADDER (CPU)', () => { G.mode = 'ranked'; go('select'); }], ['SKIN SHOP + WALLET', () => go('shop')], ['HOW TO PLAY', () => go('help')], ['COMBO TRAINER', () => { G.mode = 'trainer'; go('select'); }], ['CONTROLLER + SETTINGS', () => go('pads')]];
-function go(s) { G.scr = s; G.t = 0; regions = []; G.ready = [false, false]; if (s !== 'lobby' && s !== 'versus' && s !== 'fight' && s !== 'onlineres' && G.net?.s && !G.net.s.closed) { G.net.s.leave(); G.net = null; }
+function go(s) { const from = G.scr; G.nudge = null; if (shouldNudge({ from, to: s, mode: G.mode, ss: SS() })) { G.nudge = { i: 1 }; markNudge(SS()); } /* focus starts on Not now, so mashing through results never opens the shop */
+  G.scr = s; G.t = 0; regions = []; G.ready = [false, false]; if (s !== 'lobby' && s !== 'versus' && s !== 'fight' && s !== 'onlineres' && G.net?.s && !G.net.s.closed) { G.net.s.leave(); G.net = null; }
   if (s === 'menu' || s === 'online' || s === 'title' || s === 'select' || s === 'shop' || s === 'help' || s === 'pads') music('menu'); if (s === 'pads') { G.padsI = 0; G.remap = null; G.padsFam = curFam() || G.padsFam || 'ps'; } if (s === 'select') refreshOwned();
   if (s === 'fight') { G.amb = null; ambience(G.match?.stage); } else if (s !== 'versus') ambience(null); if (s === 'menu') { dailyNow(); refreshFeed(); } }
 async function refreshOwned() { const inv = K.wallet.address ? await K.wallet.inventory() : []; G.holder = await K.isHolder(); G.owned = ['base', ...(G.holder ? ['alt'] : []), ...inv.filter((x) => SKINS[x])]; G.bal = K.wallet.address ? (await K.wallet.balance()).ui : null; }
 function menuKey(k) {
   if (G.scr === 'title') { sfx('confirm'); return go('menu'); }
-  if (G.scr === 'menu') { if (k === 'up') G.menuI = (G.menuI + MENU.length - 1) % MENU.length; if (k === 'down') G.menuI = (G.menuI + 1) % MENU.length; if (k === 'ok') { sfx('confirm'); MENU[G.menuI][1](); } if (k === 'back') go('title'); if (k === 'up' || k === 'down') sfx('select'); return; }
+  if (G.nudge) { nudgeKey(k); return; }
+  if (G.scr === 'menu') { const n = MENU.length + 2; if (k === 'up') G.menuI = (G.menuI + n - 1) % n; if (k === 'down') G.menuI = (G.menuI + 1) % n; if ((k === 'left' || k === 'right') && G.menuI >= MENU.length) G.menuI = G.menuI === MENU.length ? MENU.length + 1 : MENU.length;
+    if (k === 'ok') { sfx('confirm'); if (G.menuI === MENU.length) shopLink('shop', 'menu'); else if (G.menuI === MENU.length + 1) shopLink('for-devs', 'menu'); else MENU[G.menuI][1](); } if (k === 'back') go('title'); if (k === 'up' || k === 'down' || k === 'left' || k === 'right') sfx('select'); return; }
   if (G.scr === 'online') { const n = ONLINE.length; if (k === 'up') G.onI = (G.onI + n - 1) % n; if (k === 'down') G.onI = (G.onI + 1) % n; if (k === 'ok') { sfx('confirm'); ONLINE[G.onI][1](); } if (k === 'back') go('menu'); return; }
   if (G.scr === 'lobby') { if (k === 'back') go('online'); return; }
   if (G.scr === 'onlineres') { if (k === 'ok' || k === 'back') { sfx('confirm'); go('online'); } return; }
@@ -390,9 +394,11 @@ function drawMenu() {
   const vol = isMuted() ? 'MUTED' : `${Math.round(getVolume() * 100)}%`, fxs = G.fxPref === 'auto' ? `AUTO·${FX() === 'full' ? 'FULL' : 'LOW'}` : G.fxPref.toUpperCase();
   panel(100, 256, 88, 20, '#121a36', '#4a4f8c'); text(`SOUND ${vol}`, 144, 266, 7, '#fff6e0', 'center', SMALL, null); btn(98, 254, 92, 24, () => { unlock(); cycleVolume(); syncMuteBtn(); });
   panel(194, 256, 110, 20, '#121a36', '#4a4f8c'); text(`EFFECTS ${fxs}`, 249, 266, 7, '#fff6e0', 'center', SMALL, null); btn(192, 254, 114, 24, () => { G.fxPref = FX_PREFS[(FX_PREFS.indexOf(G.fxPref) + 1) % FX_PREFS.length]; lsSet('mb.fx', G.fxPref); });
-  const p = K.profile(); text(`RANK ${p.rating} ELO · ${K.wallet.address ? 'WALLET ' + K.wallet.address.slice(0, 4) + '..' + K.wallet.address.slice(-4) : 'NO WALLET'}${K.wallet.simulated ? ' (SIM)' : ''}`, 202, 290, 7, '#9ab0d4', 'center', SMALL, null);
-  text('Feed: kibble-pay verified ranked results', 202, 304, 6, '#6a7aa4', 'center', SMALL, null);
+  drawShopLinks();
+  const p = K.profile(); text(`RANK ${p.rating} ELO · ${K.wallet.address ? 'WALLET ' + K.wallet.address.slice(0, 4) + '..' + K.wallet.address.slice(-4) : 'NO WALLET'}${K.wallet.simulated ? ' (SIM)' : ''}`, 202, 304, 7, '#9ab0d4', 'center', SMALL, null);
+  text('Feed: kibble-pay verified ranked results', 202, 315, 6, '#6a7aa4', 'center', SMALL, null);
   drawDaily(312, 36); drawFeed(312, 108); drawBadges(312, 190);
+  if (G.menuI === MENU.length || overRect(SHOP_RECT)) shopTip();
 }
 function drawDaily(x, y) {
   const ch = dailyNow(), D = G.daily, w = 314, done = D.done, [, mm, dd] = ch.date.split('-'), prog = Math.min(ch.target, D.prog);
@@ -460,6 +466,37 @@ function drawLadder() {
   G.ladder.forEach((id, i) => { const c = byId(id), y = 300 - i * 40, done = i < G.li, cur = i === G.li; panel(230, y - 16, 180, 32, cur ? '#3a2060' : '#121a36', cur ? '#ffd25a' : done ? '#3ec46a' : '#4a4f8c'); portrait(c, 232, y - 15, 1.15, 'base'); text(c.name.toUpperCase(), 330, y, 7, done ? '#3ec46a' : '#fff6e0'); if (done) text('REKT', 400, y, 6, '#3ec46a', 'right'); });
   drawSprite(byId(G.p1), 'idle', G.skin[0], 120, 320, 2.4, 1); if (Math.floor(G.t / 30) % 2) text('PRESS START / TAP', 520, 320, 9, '#fff6e0'); btn(0, 0, W, H, startFight);
 }
+// ---------------- Shop / For devs links + once-per-session results nudge (copy: src/shoplinks.js) ----------------
+function SS() { try { return sessionStorage; } catch { return null; } }
+const SHOP_RECT = { x: 100, y: 281, w: 88, h: 15 }, DEVS_RECT = { x: 194, y: 281, w: 110, h: 15 }, NUDGE_SCREENS_DRAW = ['gameover', 'ladder', 'ending', 'rankres'];
+const NUDGE_BOX = { x: 100, y: 222, w: 370, h: 88 }, NUDGE_BTNS = [{ x: 116, y: 284, w: 170, h: 20 }, { x: 300, y: 284, w: 154, h: 20 }];
+const overRect = (r) => G.hover && G.hover.x >= r.x && G.hover.x <= r.x + r.w && G.hover.y >= r.y && G.hover.y <= r.y + r.h;
+function shopLink(product, where) { trackPaid(globalThis.va, product, where); openLink(window, product === 'shop' ? SHOP_URL : DEVS_URL); }
+function linkBox(r, label, on) { ctx.fillStyle = on ? '#3a2060' : 'rgba(18,26,54,.85)'; ctx.fillRect(r.x, r.y, r.w, r.h); ctx.strokeStyle = on ? '#ffd25a' : '#4a4f8c'; ctx.lineWidth = 1; ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+  text(label, r.x + r.w / 2, r.y + r.h / 2 + 0.5, 7, on ? '#ffd25a' : '#7ad3f0', 'center', SMALL, null); ctx.font = `7px ${SMALL}`; const tw = ctx.measureText(label).width; ctx.fillStyle = on ? '#ffd25a' : '#7ad3f0'; ctx.fillRect(r.x + r.w / 2 - tw / 2, r.y + r.h - 3, tw, 1);
+  if (on && G.padActive) { ctx.strokeStyle = `rgba(122,211,240,${0.55 + 0.45 * Math.sin(G.t / 8)})`; ctx.lineWidth = 2; ctx.strokeRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4); ctx.lineWidth = 1; } }
+function drawShopLinks() {
+  linkBox(SHOP_RECT, SHOP_COPY.shop, G.menuI === MENU.length || overRect(SHOP_RECT)); btn(SHOP_RECT.x - 2, SHOP_RECT.y - 2, SHOP_RECT.w + 4, SHOP_RECT.h + 4, () => { G.menuI = MENU.length; shopLink('shop', 'menu'); });
+  linkBox(DEVS_RECT, SHOP_COPY.devs, G.menuI === MENU.length + 1 || overRect(DEVS_RECT)); btn(DEVS_RECT.x - 2, DEVS_RECT.y - 2, DEVS_RECT.w + 4, DEVS_RECT.h + 4, () => { G.menuI = MENU.length + 1; shopLink('for-devs', 'menu'); });
+}
+// tooltip for the Shop link (focus by keyboard/controller, or mouse hover; the canvas title attribute carries it too)
+function shopTip() { panel(98, 299, 208, 19, '#0c0a1c', '#7ad3f0'); const [a, b] = splitAt(SHOP_COPY.shopTitle, 'is '); text(a, 202, 304, 6, '#fff6e0', 'center', SMALL, null); text(b, 202, 313, 6, '#fff6e0', 'center', SMALL, null); }
+const splitAt = (s, w) => { const i = s.indexOf(w); return i < 0 ? [s, ''] : [s.slice(0, i + w.length).trimEnd(), s.slice(i + w.length)]; };
+function wrapText(s, maxW, size) { ctx.font = `${size}px ${SMALL}`; const out = []; let line = ''; for (const w of s.split(' ')) { const t = line ? line + ' ' + w : w; if (ctx.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t; } if (line) out.push(line); return out; }
+function nudgeKey(k) { const N = G.nudge; if (!N) return;
+  if (k === 'left' || k === 'right' || k === 'up' || k === 'down') { N.i = 1 - N.i; sfx('select'); return; }
+  if (k === 'back') { G.nudge = null; sfx('select'); return; }
+  if (k === 'ok') { G.nudge = null; sfx('confirm'); if (N.i === 0) shopLink('shop', 'results'); } }
+function drawNudge() {
+  const N = G.nudge, B = NUDGE_BOX; regions.length = 0; // modal: only its two buttons take taps
+  panel(B.x, B.y, B.w, B.h, '#1c1440', '#7ad3f0'); wrapText(SHOP_COPY.nudge, B.w - 28, 8).forEach((l, j) => text(l, B.x + B.w / 2, B.y + 14 + j * 14, 8, '#fff6e0', 'center', SMALL, null));
+  [SHOP_COPY.visit, SHOP_COPY.notNow].forEach((l, j) => { const r = NUDGE_BTNS[j], on = N.i === j; panel(r.x, r.y, r.w, r.h, on ? '#3a2060' : '#121a36', on ? '#ffd25a' : '#4a4f8c'); text(l, r.x + r.w / 2, r.y + r.h / 2 + 0.5, 8, on ? '#ffd25a' : '#fff6e0', 'center', SMALL, null);
+    if (on && G.padActive) { ctx.strokeStyle = `rgba(122,211,240,${0.55 + 0.45 * Math.sin(G.t / 8)})`; ctx.lineWidth = 2; ctx.strokeRect(r.x - 3, r.y - 3, r.w + 6, r.h + 6); ctx.lineWidth = 1; }
+    btn(r.x - 2, r.y - 2, r.w + 4, r.h + 4, () => { N.i = j; nudgeKey('ok'); }); });
+}
+cv.addEventListener('pointermove', (e) => { const r = cv.getBoundingClientRect(); G.hover = { x: (e.clientX - r.left) * (W / r.width), y: (e.clientY - r.top) * (H / r.height) };
+  const t = G.scr === 'menu' && overRect(SHOP_RECT) ? SHOP_COPY.shopTitle : ''; if (cv.title !== t) cv.title = t; cv.style.cursor = G.scr === 'menu' && (overRect(SHOP_RECT) || overRect(DEVS_RECT)) ? 'pointer' : ''; });
+cv.addEventListener('pointerleave', () => { G.hover = null; cv.title = ''; });
 function drawEnd(title, sub, col) { ctx.fillStyle = '#120a1e'; ctx.fillRect(0, 0, W, H); text(title, 320, 120, 26, col); sub.forEach((s, i) => text(s, 320, 170 + i * 20, 9, '#fff6e0')); if (Math.floor(G.t / 30) % 2) text('PRESS START / TAP', 320, 320, 10, '#9ab0d4'); btn(0, 0, W, H, () => menuKey('ok')); }
 // ---------------- CONTROLLER + SETTINGS ----------------
 // Rows: settings (sound, effects, vibration), the 8 remappable actions for the shown glyph family, reset, back.
@@ -651,7 +688,8 @@ function update() {
 }
 function updateMenus(scr) {
   const G2 = { scr }; if (G2.scr !== G.scr) return;
-  if (G.scr === 'menu') { if (edge(0, 'u')) menuKey('up'); if (edge(0, 'd')) menuKey('down'); if (edge(0, 'lp') || edge(0, 'hp')) menuKey('ok'); }
+  if (G.nudge) { if (edge(0, 'l') || edge(0, 'u')) nudgeKey('left'); if (edge(0, 'r') || edge(0, 'd')) nudgeKey('right'); if (edge(0, 'lp') || edge(0, 'hp')) nudgeKey('ok'); if (edge(0, 'lk')) nudgeKey('back'); return; }
+  if (G.scr === 'menu') { if (edge(0, 'u')) menuKey('up'); if (edge(0, 'd')) menuKey('down'); if (edge(0, 'l')) menuKey('left'); if (edge(0, 'r')) menuKey('right'); if (edge(0, 'lp') || edge(0, 'hp')) menuKey('ok'); }
   else if (G.scr === 'online') { if (edge(0, 'u')) menuKey('up'); if (edge(0, 'd')) menuKey('down'); if (edge(0, 'lp') || edge(0, 'hp')) menuKey('ok'); }
   else if (G.scr === 'shop') { if (edge(0, 'u')) menuKey('up'); if (edge(0, 'd')) menuKey('down'); if (edge(0, 'lp')) menuKey('ok'); }
   else if ((G.scr === 'ladder' || G.scr === 'onlineres' || G.scr === 'gameover' || G.scr === 'ending' || G.scr === 'rankres') && G.t > 20 && (edge(0, 'lp') || edge(0, 'hp'))) menuKey('ok');
@@ -768,6 +806,7 @@ function render() {
       break; }
   }
   ctx.restore();
+  if (G.nudge && NUDGE_SCREENS_DRAW.includes(G.scr)) drawNudge();
   if (G.toast) { const a = Math.min(1, G.toast.t / 20), P = G.toast.pad; ctx.globalAlpha = a;
     if (P) { const fam = P.fam; panel(90, 112, 460, 64, '#1c1440', '#ffd25a'); text(G.toast.text, 320, 124, 8, '#ffd25a', 'center', SMALL, null);
       ctx.font = `7px ${SMALL}`; glyphRow(fam, mapPairs(fam, ['lp', 'hp', 'lk', 'hk']), 112, 143, 6); glyphRow(fam, mapPairs(fam, ['special', 'super', 'block']), 318, 143, 6);
@@ -791,4 +830,4 @@ function fit() { const vw = innerWidth, vh = innerHeight, d = devicePixelRatio |
 addEventListener('resize', fit); fit();
 // 🏠 Back to Inu Verse hooks (kibble-pay mountHome): confirm mid-match, save first.
 globalThis.__inuHome = { busy: () => G.scr === 'fight' ? 'Leave this fight and go back to Inu Verse? The match is forfeited (rank kept).' : false };
-window.__mbUI = { pads: () => ({ count: PM.count(), list: PM.list().map((g) => ({ index: g.index, id: g.id })), slots: [PM.family(0), PM.family(1)], active: G.padActive, fam: curFam(), maps: { ps: padMap('ps'), xbox: padMap('xbox'), generic: padMap('generic') }, vibe: G.vibe, pauseI: G.pauseI, padsI: G.padsI, remap: G.remap, padsFam: G.padsFam }), openMoveList, startTrainer, trainerReset, trainerPick, ML, menuRect: (i) => MENU_RECT(i), fxLevel: () => FX(), fxMon: FXM, refreshFeed, dailyNow, audioStarted }; // e2e/screenshot hooks (UI navigation + read-only state, no game-state cheats)
+window.__mbUI = { shopRects: () => ({ shop: SHOP_RECT, devs: DEVS_RECT, nudge: NUDGE_BOX, nudgeBtns: NUDGE_BTNS }), nudge: () => G.nudge && { ...G.nudge }, pads: () => ({ count: PM.count(), list: PM.list().map((g) => ({ index: g.index, id: g.id })), slots: [PM.family(0), PM.family(1)], active: G.padActive, fam: curFam(), maps: { ps: padMap('ps'), xbox: padMap('xbox'), generic: padMap('generic') }, vibe: G.vibe, pauseI: G.pauseI, padsI: G.padsI, remap: G.remap, padsFam: G.padsFam }), openMoveList, startTrainer, trainerReset, trainerPick, ML, menuRect: (i) => MENU_RECT(i), fxLevel: () => FX(), fxMon: FXM, refreshFeed, dailyNow, audioStarted }; // e2e/screenshot hooks (UI navigation + read-only state, no game-state cheats)
