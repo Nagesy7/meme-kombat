@@ -73,3 +73,34 @@ Zachary's call: once adopted this is the **only** touch layout (no toggle, no UR
   - With no data it says "No ranked wins yet today. Be the first!", and it shows an offline state on errors. It never shows placeholder rows.
   - No new endpoint was needed.
 - **Menu layout:** two columns placed clear of the phone touch controls, the wallet pill and the top-right buttons. `scripts/e2e-alive.mjs` measures this at 667x375, 750x342, 844x390 and 1280x800.
+
+## Controllers: Bluetooth / USB gamepads (PS-style, Xbox-style, generic)
+- **Same input path.** `src/gamepad.js` reads `navigator.getGamepads()` (W3C standard mapping) once per sim tick inside `readPads()` and only ORs the usual `{u,d,l,r,lp,hp,lk,hk}` bits into `pads[slot]`, exactly like keyboard and touch. No new sim state, no encoding change, no rules bump. Online sends the same encoded bits and replays are unchanged. `tests/gamepad.test.js` plays a full match from keyboard bits and from pad input and gets identical per-tick encodings, `stateHash` and `resultReport`.
+- **Movement:** D-pad or left stick, radial deadzone 0.35, 8-way 45° sectors so diagonals work for ↓↘→ / ↓↙← rolls. Opposite directions cancel to neutral.
+- **Default mapping (remappable):**
+
+| Action | PS-style | Xbox-style | Generic |
+|---|---|---|---|
+| Light punch (LP) | □ | X | 3 |
+| Heavy punch (HP) | △ | Y | 4 |
+| Light kick (LK) | ✕ | A | 1 |
+| Heavy kick (HK) | ○ | B | 2 |
+| Special: shot (D,DF,F+P shortcut) | L1 | LB | L1 |
+| Super (D,DF,F+K shortcut, needs full meter) | R1 | RB | R1 |
+| Block (holds back) | L2 | LT | L2 |
+| Launcher (D,D+P shortcut) | R2 | RT | R2 |
+| Menus: confirm / back | ✕ / ○ | A / B | 1 / 2 |
+| Pause | OPTIONS | MENU | START |
+| Trainer reset | CREATE | VIEW | SELECT |
+
+  The shortcuts are input macros: they feed the same motion inputs (2 ticks per step, facing taken at the press) through the normal bits, so they are not a new move or sim path.
+- **Menus:** every screen works by pad: title, main menu, fighter select (✕ ready, ○ back/unready, △ skin, □ Move List), online lobby and results, shop, ladder, help, CONTROLLER + SETTINGS, the pause menu (new focus index, also W/S + Enter on keyboard), Move List (L1/R1 or D-pad fighter, △ trainer, ○ back) and the Trainer pause items (NEXT DRILL, SHOW ME, RESET). A pulsing outline plus a confirm glyph marks the focused menu item while a pad is in use. There is no separate stage-select screen; stages follow the fighter.
+- **CONTROLLER + SETTINGS (menu item 8):** sound, effects, VIBRATION (`mb.vibe`, gates pad rumble and phone vibration), connected pads, and the remap list. Pick an action, then press the new button; actions swap so the map stays 1:1. Maps are saved per glyph family on the device (`mb.padmap.ps`, `.xbox`, `.generic`). There is a reset-to-default row for each family.
+- **Hot-plug:**
+  - Connect toast: family, player slot, and short button hints drawn as glyphs.
+  - Disconnect toast. A local fight pauses safely; an online fight carries on with the toast.
+  - Pad 2 becomes P2 in VERSUS 2P (local 1v1, casual: no prizes, no $KIBBLE, no rank).
+  - The touch overlay hides while a pad is active (`body.padactive`) and returns on the next touch.
+- **Rumble:** `vibrationActuator.playEffect('dual-rumble')` on hit, block and KO when VIBRATION is on. Errors are swallowed.
+- **Art:** all glyphs are plain shapes and letters drawn on the canvas. No console logos or artwork.
+- **Tests:** `tests/gamepad.test.js` (unit) and `scripts/e2e-gamepad.mjs` (fake pads injected into `navigator.getGamepads`). Neither has been tried on real Bluetooth hardware yet.

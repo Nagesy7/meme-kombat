@@ -2,6 +2,7 @@ import { ROSTER, BOSS, byId, STAGES } from './roster.js';
 import { makeMatch, step, cpuInput, W, ROUND_FRAMES } from './logic.js';
 import { sprite, poseFor, SKINS } from './sprites.js';
 import { stageCanvas, stageFx } from './stages.js';
+import { PadManager, PadPlayer, readGamepad, loadMap, saveMap, resetMap, remap, normMap, label as padLabel, ACTIONS as PAD_ACTIONS, ACTION_NAME, ACTION_SHORT, FAMILY_NAME, REMAPPABLE, btnWord } from './gamepad.js';
 import { unlock, sfx, music, setMuted, isMuted, ambience, cheer, setHype, cycleVolume, setVolume, getVolume, VOLUME_STEPS, audioStarted } from './audio.js';
 import { createAmbient, ambientEvent, ambientTick, drawAmbientBack, drawAmbientCrowd, drawAmbientFront, fxMonitor, fxLevel, FX_PREFS } from './ambient.js';
 import { sydneyDate, dailyFor, forToday, dailyEvent, dailyMatchEnd, badgeTier, DAILY_KEY } from './daily.js';
@@ -26,7 +27,7 @@ const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d;
 G.fxPref = FX_PREFS.includes(lsGet('mb.fx', 'auto')) ? lsGet('mb.fx', 'auto') : 'auto';
 const FX = () => fxLevel(G.fxPref, { reducedMotion: !!RMQ?.matches, autoLow: FXM.autoLow, forced: FXQ });
 G.menuAmb = null; G.amb = null; G.toast = null;
-function toast(t, dur = 180) { G.toast = { text: t, t: dur }; }
+function toast(t, dur = 180, pad = null) { G.toast = { text: t, t: dur, pad }; }
 function dailyNow() { const key = sydneyDate(); const ch = dailyFor(key); G.daily = forToday(G.daily || lsGet(DAILY_KEY, null), key); return ch; }
 function dailySave() { lsSet(DAILY_KEY, G.daily); }
 G.feed = { rows: [], state: 'idle', at: 0, err: '' };
@@ -51,11 +52,100 @@ function readPads() {
   for (let i = 0; i < 2; i++) { prevPads[i] = pads[i]; pads[i] = {}; }
   for (const c of new Set([...held, ...tapped])) { if (KEY1[c]) pads[0][KEY1[c]] = 1; if (KEY2[c]) pads[two ? 1 : 0][KEY2[c]] = 1; }
   for (const k in touchPad) if (touchPad[k] || touchTap[k]) pads[0][k] = 1;
+  pollGamepads(two);
   tapped.clear(); for (const k in touchTap) touchTap[k] = 0;
   touch.classList.toggle('fight', G.scr === 'fight'); touch.classList.toggle('hide', G.scr === 'movelist'); // move list: full-screen reading, canvas buttons only
   // the wide floating-stick zone only exists in fights (menus keep canvas taps)
 }
 const edge = (i, k) => pads[i][k] && !prevPads[i][k];
+
+// ---------------- gamepads (Bluetooth / USB, W3C standard mapping) ----------------
+// Polled once per sim frame inside readPads(): pads only add the same {u,d,l,r,lp,hp,lk,hk} bits keyboard and touch use,
+// so local, CPU, online lockstep and replays see identical input (no sim state, no encoding change, no rules bump).
+const PM = new PadManager(), PP = [new PadPlayer(), new PadPlayer()], padMaps = {};
+G.padActive = false; G.vibe = lsGet('mb.vibe', true) !== false; G.padsI = 0; G.remap = null; G.padsFam = 'ps'; G.pauseI = 0;
+const padMap = (fam) => (padMaps[fam] ||= loadMap(LS(), fam));
+function LS() { try { return localStorage; } catch { return null; } }
+function markPad(on) { if (G.padActive === on) return; G.padActive = on; document.body.classList.toggle('padactive', on); }
+addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') markPad(false); }, { capture: true, passive: true });
+addEventListener('keydown', () => markPad(false), { capture: true });
+const LP_SCREENS = ['menu', 'online', 'shop', 'ladder', 'onlineres', 'gameover', 'ending', 'rankres', 'title', 'select', 'versus'];
+function pollGamepads(two) {
+  for (const e of PM.poll()) padEvent(e);
+  if (!PM.count()) return;
+  const inFight = G.scr === 'fight' && !G.paused && G.mode !== 'replay';
+  for (let s = 0; s < 2; s++) {
+    const gp = PM.pad(s); if (!gp) continue; const fam = PM.family(s), raw = readGamepad(gp, padMap(fam)), P = PP[s], pi = two ? s : 0;
+    if (raw.any) { if (!G.padActive) markPad(true); G.lastPadSlot = s; }
+    const prevBtn = P.prev.btn, pe = (i) => raw.btn[i] && !prevBtn[i];
+    if (G.remap) { const e = P.uiEdges(raw); if (e[9]) { G.remap = null; toast('REMAP CANCELLED', 90); continue; } const b = REMAPPABLE.find((i) => e[i]); if (b != null && G.t > G.remap.t0 + 2) {
+        const R = G.remap; G.remap = null; padMaps[R.fam] = saveMap(LS(), R.fam, remap(padMap(R.fam), R.a, b)); sfx('confirm'); toast(`${ACTION_SHORT[R.a]} = ${btnWord(R.fam, b)} (SAVED FOR ${R.fam === 'ps' ? 'PS' : R.fam === 'xbox' ? 'XBOX' : 'GENERIC'} PADS)`, 120); } continue; }
+    if (inFight) {
+      if (pe(9) && G.mode !== 'online') { P.uiEdges(raw); G.paused = true; G.pauseI = 0; continue; } // OPTIONS / MENU pauses
+      if (pe(8) && G.mode === 'trainer') trainerReset();
+      const side = G.mode === 'online' ? (G.net?.s?.side ?? 0) : pi, face = G.match?.f?.[side]?.face ?? (side ? -1 : 1);
+      const bits = P.fightBits(raw, face); for (const k in bits) pads[pi][k] = 1; continue;
+    }
+    const e = P.uiEdges(raw); for (const k of ['u', 'd', 'l', 'r']) if (raw.dirs[k]) pads[pi][k] = 1;
+    padUi(e, pi);
+  }
+}
+function padUi(e, pi) {
+  const scr = G.scr;
+  if (scr === 'fight') { if (G.paused) { if (e[9] || e[1]) { G.paused = false; return; } if (e[0]) pauseAct(); } return; }
+  if (scr === 'pads') { if (e[0]) menuKey('ok'); if (e[1]) menuKey('back'); return; }
+  if (e[0]) { if (LP_SCREENS.includes(scr)) pads[pi].lp = 1; else menuKey('ok'); }
+  if (e[1]) { if (scr === 'select' || scr === 'movelist') pads[pi].lk = 1; else if (pi === 0) menuKey('back'); }
+  if (e[3]) { if (scr === 'movelist') hotKey('KeyT'); else pads[pi].hk = 1; }
+  if (e[2] && pi === 0 && scr === 'select') hotKey('KeyI');
+  if (scr === 'movelist') { if (e[4]) mlNav(-1); if (e[5]) mlNav(1); }
+  if (e[9] && scr === 'title') menuKey('ok');
+}
+function padEvent(e) {
+  const fam = e.family, who = e.slot >= 0 ? `P${e.slot + 1}` : 'EXTRA';
+  if (e.type === 'connect') { if (e.slot >= 0) PP[e.slot].reset(); markPad(true); G.padsFam = fam;
+    toast(`${FAMILY_NAME[fam].toUpperCase()} CONNECTED · ${who}${e.slot === 1 ? ' (VERSUS 2P)' : ''}`, 300, { fam, map: padMap(fam) }); sfx('select'); return; }
+  if (e.slot >= 0) PP[e.slot].reset();
+  const pause = G.scr === 'fight' && !G.paused && G.mode !== 'online' && G.mode !== 'replay' && e.slot >= 0;
+  if (pause) { G.paused = true; G.pauseI = 0; }
+  toast(`CONTROLLER ${who} DISCONNECTED${pause ? ' · PAUSED' : ''}`, 200); if (!PM.count()) markPad(false);
+}
+function padRumble(ev) {
+  if (!G.vibe || G.mode === 'replay' || !PM.count()) return;
+  const big = ev.type === 'ko' || ev.heavy, dur = ev.type === 'ko' ? 220 : ev.type === 'block' ? 40 : big ? 110 : 60;
+  for (let s = 0; s < 2; s++) { const gp = PM.pad(s), va = gp?.vibrationActuator; if (!va?.playEffect) continue;
+    try { va.playEffect(va.type || 'dual-rumble', { startDelay: 0, duration: dur, weakMagnitude: big ? 0.6 : 0.35, strongMagnitude: big ? 0.8 : ev.type === 'block' ? 0.1 : 0.3 })?.catch?.(() => {}); } catch {} }
+}
+// pause menu (keyboard W/S + Enter, pad D-pad + cross/A, or taps)
+function pauseItems() { const L = [['RESUME', () => (G.paused = false)], ['MOVE LIST', () => openMoveList(G.p1, 'pause')]];
+  if (G.mode === 'trainer') L.push(['NEXT DRILL', () => { trainerPick(1); G.paused = false; }], ['SHOW ME', () => { trainerReset(true); G.paused = false; }], ['RESET', () => { trainerReset(); G.paused = false; }]);
+  L.push(['QUIT', () => { G.paused = false; go('menu'); }]); return L; }
+function pauseAct() { const L = pauseItems(); sfx('confirm'); L[Math.min(G.pauseI, L.length - 1)][1](); }
+function pauseNav() { const n = pauseItems().length; if (edge(0, 'u')) { G.pauseI = (G.pauseI + n - 1) % n; sfx('select'); } if (edge(0, 'd')) { G.pauseI = (G.pauseI + 1) % n; sfx('select'); } if (edge(0, 'lp')) pauseAct(); }
+// glyphs: original drawings (plain shapes / letters), no logos
+function drawGlyph(fam, b, x, y, r = 6) {
+  const face = b <= 3, lab = padLabel(fam, b);
+  ctx.save(); ctx.fillStyle = '#0c0a1c'; ctx.strokeStyle = '#fff6e0'; ctx.lineWidth = 1;
+  if (face) { ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.stroke();
+    if (fam === 'ps') { const q = r * 0.5; ctx.lineWidth = 1.5; ctx.beginPath();
+      if (b === 0) { ctx.moveTo(x - q, y - q); ctx.lineTo(x + q, y + q); ctx.moveTo(x + q, y - q); ctx.lineTo(x - q, y + q); }
+      else if (b === 1) ctx.arc(x, y, q, 0, 7); else if (b === 2) ctx.rect(x - q, y - q, 2 * q, 2 * q);
+      else { ctx.moveTo(x, y - q * 1.1); ctx.lineTo(x + q, y + q * 0.8); ctx.lineTo(x - q, y + q * 0.8); ctx.closePath(); } ctx.stroke(); }
+    else text(lab, x + 0.5, y + 0.5, Math.round(r * 1.3), '#fff6e0', 'center', SMALL, null); }
+  else { ctx.font = `${Math.round(r * 1.1)}px ${SMALL}`; const w = Math.max(r * 2, ctx.measureText(lab).width + r); ctx.beginPath(); ctx.roundRect?.(x - w / 2, y - r * 0.85, w, r * 1.7, r * 0.6) ?? ctx.rect(x - w / 2, y - r * 0.85, w, r * 1.7); ctx.fill(); ctx.stroke();
+    text(lab, x, y + 0.5, Math.round(r * 1.1), '#fff6e0', 'center', SMALL, null); }
+  ctx.restore(); ctx.font = `8px ${SMALL}`; ctx.measureText(lab); return x;
+}
+// controller focus: pulsing outline + confirm glyph on the focused item (only while a pad is in use)
+function padFocus(r) { const f = curFam() || 'generic'; ctx.strokeStyle = `rgba(122,211,240,${0.55 + 0.45 * Math.sin(G.t / 8)})`; ctx.lineWidth = 2; ctx.strokeRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4); ctx.lineWidth = 1; drawGlyph(f, 0, r.x + r.w - 13, r.y + r.h / 2, 7); }
+// row of [button, label] hints; returns end x
+function glyphRow(fam, pairs, x, y, r = 6, size = 7, col = '#fff6e0') {
+  for (const [b, t] of pairs) { ctx.font = `${Math.round(r * 1.1)}px ${SMALL}`; const gw = b <= 3 ? r * 2 : Math.max(r * 2, ctx.measureText(padLabel(fam, b)).width + r);
+    drawGlyph(fam, b, x + gw / 2, y, r); x += gw + 3; ctx.font = `${size}px ${SMALL}`; text(t, x, y, size, col, 'left', SMALL, null); x += ctx.measureText(t).width + 9; }
+  return x;
+}
+const mapPairs = (fam, keys = PAD_ACTIONS) => { const m = padMap(fam); return keys.map((a) => [m[a], ACTION_SHORT[a]]); };
+const curFam = () => PM.family(G.lastPadSlot ?? 0) || PM.family(0) || PM.family(1) || null;
 
 // touch controls
 const touch = document.getElementById('touch');
@@ -112,9 +202,9 @@ cv.addEventListener('pointerdown', (e) => { unlock(); const r = cv.getBoundingCl
   for (const g of [...regions].reverse()) if (x >= g.x && x <= g.x + g.w && y >= g.y && y <= g.y + g.h) { sfx('select'); g.fn(); return; } if (G.scr === 'title') go('menu'); });
 
 // ---------------- screens ----------------
-const MENU = [['ARCADE', () => { G.mode = 'arcade'; go('select'); }], ['VERSUS 2P', () => { G.mode = 'versus'; go('select'); }], ['ONLINE 1V1', () => go('online')], ['PRACTICE LADDER (CPU)', () => { G.mode = 'ranked'; go('select'); }], ['SKIN SHOP + WALLET', () => go('shop')], ['HOW TO PLAY', () => go('help')], ['COMBO TRAINER', () => { G.mode = 'trainer'; go('select'); }]];
+const MENU = [['ARCADE', () => { G.mode = 'arcade'; go('select'); }], ['VERSUS 2P', () => { G.mode = 'versus'; go('select'); }], ['ONLINE 1V1', () => go('online')], ['PRACTICE LADDER (CPU)', () => { G.mode = 'ranked'; go('select'); }], ['SKIN SHOP + WALLET', () => go('shop')], ['HOW TO PLAY', () => go('help')], ['COMBO TRAINER', () => { G.mode = 'trainer'; go('select'); }], ['CONTROLLER + SETTINGS', () => go('pads')]];
 function go(s) { G.scr = s; G.t = 0; regions = []; G.ready = [false, false]; if (s !== 'lobby' && s !== 'versus' && s !== 'fight' && s !== 'onlineres' && G.net?.s && !G.net.s.closed) { G.net.s.leave(); G.net = null; }
-  if (s === 'menu' || s === 'online' || s === 'title' || s === 'select' || s === 'shop' || s === 'help') music('menu'); if (s === 'select') refreshOwned();
+  if (s === 'menu' || s === 'online' || s === 'title' || s === 'select' || s === 'shop' || s === 'help' || s === 'pads') music('menu'); if (s === 'pads') { G.padsI = 0; G.remap = null; G.padsFam = curFam() || G.padsFam || 'ps'; } if (s === 'select') refreshOwned();
   if (s === 'fight') { G.amb = null; ambience(G.match?.stage); } else if (s !== 'versus') ambience(null); if (s === 'menu') { dailyNow(); refreshFeed(); } }
 async function refreshOwned() { const inv = K.wallet.address ? await K.wallet.inventory() : []; G.holder = await K.isHolder(); G.owned = ['base', ...(G.holder ? ['alt'] : []), ...inv.filter((x) => SKINS[x])]; G.bal = K.wallet.address ? (await K.wallet.balance()).ui : null; }
 function menuKey(k) {
@@ -125,11 +215,12 @@ function menuKey(k) {
   if (G.scr === 'onlineres') { if (k === 'ok' || k === 'back') { sfx('confirm'); go('online'); } return; }
   if (G.scr === 'movelist') { if (k === 'back' || k === 'ok') closeMoveList(); return; }
   if (G.scr === 'select') { if (k === 'back') { if (G.ready[0]) G.ready[0] = false; else go('menu'); } return; }
-  if (G.scr === 'fight') { if (G.mode === 'online') return; if (k === 'back') { if (G.paused) { G.paused = false; go('menu'); } else G.paused = true; } return; }
+  if (G.scr === 'fight') { if (G.mode === 'online') return; if (k === 'ok' && G.paused) { pauseAct(); return; } if (k === 'back') { if (G.paused) { G.paused = false; go('menu'); } else G.paused = true; } return; }
   if (G.scr === 'gameover' || G.scr === 'rankres' || G.scr === 'ending') { if (k === 'ok') { sfx('confirm'); go(G.scr === 'rankres' ? 'select' : 'menu'); } return; }
   if (G.scr === 'ladder') { if (k === 'ok') startFight(); return; }
   if (G.scr === 'shop') { if (k === 'up') G.shopI = Math.max(0, G.shopI - 1); if (k === 'down') G.shopI = Math.min(K.SHOP.length + 1, G.shopI + 1); if (k === 'ok') shopAct(G.shopI); if (k === 'back') go('menu'); return; }
   if (G.scr === 'help' && (k === 'back' || k === 'ok')) go('menu');
+  if (G.scr === 'pads') padsKey(k);
 }
 
 // selection
@@ -219,7 +310,8 @@ function spawnFx(ev) {
     if (ev.type === 'hit') { G.fx.push({ ring: 1, x: ev.x, y: GY - ev.y, life: 10, r: 6 }); G.shake = ev.heavy ? 8 : 3; } }
   if (ev.type === 'land' && ev.heavy) { for (let i = 0; i < 10; i++) G.fx.push({ x: G.match.f[ev.who].x + (Math.random() - 0.5) * 50, y: GY, vx: (Math.random() - 0.5) * 3, vy: -Math.random() * 2, life: 20, col: '#c8b89a', s: 4 }); G.shake = 5; }
   if (ev.type === 'ko') G.shake = 14;
-  if (TOUCH() && navigator.vibrate && (ev.type === 'hit' || ev.type === 'block' || ev.type === 'ko')) try { navigator.vibrate(ev.type === 'ko' ? 60 : ev.type === 'block' ? 8 : ev.heavy ? 22 : 12); } catch {} // haptic hit feedback on phones
+  if (ev.type === 'hit' || ev.type === 'block' || ev.type === 'ko') padRumble(ev);
+  if (G.vibe && TOUCH() && navigator.vibrate && (ev.type === 'hit' || ev.type === 'block' || ev.type === 'ko')) try { navigator.vibrate(ev.type === 'ko' ? 60 : ev.type === 'block' ? 8 : ev.heavy ? 22 : 12); } catch {} // haptic hit feedback on phones
   sfx(ev.type === 'banner' ? 'banner' : ev.type, ev);
   if (G.amb) { ambientEvent(G.amb, ev); setHype(G.amb.hype); if (ev.type === 'ko' || ev.type === 'finisher') cheer(true); else if (ev.type === 'hit' && (ev.heavy || ev.combo >= 3)) cheer(false); }
   if (G.mode === 'arcade' || G.mode === 'ranked') { const ch = dailyNow(); if (dailyEvent(G.daily, ch, ev, G.mode)) dailyDone(ch); }
@@ -288,12 +380,12 @@ function drawTitle() {
 }
 // Menu layout keeps clear of the phone touch controls (stick bottom-left, buttons bottom-right), the wallet pill (bottom centre)
 // and the DOM pause/sound buttons (top right): measured at 667x375, 750x342 and 844x390 in canvas units.
-const MENU_RECT = (i) => ({ x: 14, y: 36 + i * 31, w: 290, h: 26 });
+const MENU_RECT = (i) => ({ x: 14, y: 36 + i * 27, w: 290, h: 24 }); // 8 items: 36..249, clear of the chips at 256
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 function drawMenu() {
   const lvl = FX(); ctx.drawImage(stageCanvas('moon'), 0, 0); if (!G.menuAmb) G.menuAmb = createAmbient('moon', 3); drawAmbientBack(ctx, G.menuAmb, lvl); drawAmbientCrowd(ctx, G.menuAmb, lvl);
   ctx.fillStyle = 'rgba(6,4,20,.62)'; ctx.fillRect(0, 0, W, H); text('MEME BRAWL', 159, 20, 16, '#ffd25a');
-  MENU.forEach(([n, fn], i) => { const r = MENU_RECT(i), on = i === G.menuI; panel(r.x, r.y, r.w, r.h, on ? '#3a2060' : '#121a36', on ? '#ffd25a' : '#4a4f8c'); text(n, r.x + r.w / 2, r.y + 13, 10, on ? '#ffd25a' : '#fff6e0'); btn(r.x - 2, r.y - 2, r.w + 4, r.h + 4, () => { G.menuI = i; fn(); }); });
+  MENU.forEach(([n, fn], i) => { const r = MENU_RECT(i), on = i === G.menuI; panel(r.x, r.y, r.w, r.h, on ? '#3a2060' : '#121a36', on ? '#ffd25a' : '#4a4f8c'); text(n, r.x + r.w / 2, r.y + 12, 10, on ? '#ffd25a' : '#fff6e0'); if (on && G.padActive) padFocus(r); btn(r.x - 2, r.y - 1, r.w + 4, r.h + 2, () => { G.menuI = i; fn(); }); });
   // sound + effects settings (also: M mutes, - and = change volume)
   const vol = isMuted() ? 'MUTED' : `${Math.round(getVolume() * 100)}%`, fxs = G.fxPref === 'auto' ? `AUTO·${FX() === 'full' ? 'FULL' : 'LOW'}` : G.fxPref.toUpperCase();
   panel(100, 256, 88, 20, '#121a36', '#4a4f8c'); text(`SOUND ${vol}`, 144, 266, 7, '#fff6e0', 'center', SMALL, null); btn(98, 254, 92, 24, () => { unlock(); cycleVolume(); syncMuteBtn(); });
@@ -369,10 +461,62 @@ function drawLadder() {
   drawSprite(byId(G.p1), 'idle', G.skin[0], 120, 320, 2.4, 1); if (Math.floor(G.t / 30) % 2) text('PRESS START / TAP', 520, 320, 9, '#fff6e0'); btn(0, 0, W, H, startFight);
 }
 function drawEnd(title, sub, col) { ctx.fillStyle = '#120a1e'; ctx.fillRect(0, 0, W, H); text(title, 320, 120, 26, col); sub.forEach((s, i) => text(s, 320, 170 + i * 20, 9, '#fff6e0')); if (Math.floor(G.t / 30) % 2) text('PRESS START / TAP', 320, 320, 10, '#9ab0d4'); btn(0, 0, W, H, () => menuKey('ok')); }
+// ---------------- CONTROLLER + SETTINGS ----------------
+// Rows: settings (sound, effects, vibration), the 8 remappable actions for the shown glyph family, reset, back.
+const FAMS = ['ps', 'xbox', 'generic'], FAM_TAB = { ps: 'PS', xbox: 'XBOX', generic: 'GENERIC' };
+const padsRows = () => [{ id: 'sound' }, { id: 'fx' }, { id: 'vibe' }, ...PAD_ACTIONS.map((a) => ({ id: 'map', a })), { id: 'reset' }, { id: 'back' }];
+function padsKey(k) {
+  const R = padsRows(), n = R.length, row = R[G.padsI];
+  if (G.remap) { if (k === 'back') { G.remap = null; toast('REMAP CANCELLED', 90); } return; }
+  if (k === 'up') { G.padsI = (G.padsI + n - 1) % n; sfx('select'); return; } if (k === 'down') { G.padsI = (G.padsI + 1) % n; sfx('select'); return; }
+  if (k === 'back') { sfx('confirm'); go('menu'); return; }
+  const dir = k === 'left' ? -1 : k === 'right' ? 1 : k === 'ok' ? 1 : 0; if (!dir) return;
+  if (row.id === 'sound') { unlock(); cycleVolume(); syncMuteBtn(); }
+  else if (row.id === 'fx') { G.fxPref = FX_PREFS[(FX_PREFS.indexOf(G.fxPref) + (dir > 0 ? 1 : FX_PREFS.length - 1)) % FX_PREFS.length]; lsSet('mb.fx', G.fxPref); }
+  else if (row.id === 'vibe') { G.vibe = !G.vibe; lsSet('mb.vibe', G.vibe); if (G.vibe) padRumble({ type: 'hit' }); }
+  else if (row.id === 'map') { if (k !== 'ok') { G.padsFam = FAMS[(FAMS.indexOf(G.padsFam) + FAMS.length + dir) % FAMS.length]; sfx('select'); return; }
+    if (!PM.count()) { toast('CONNECT A CONTROLLER TO REMAP (PRESS ANY BUTTON ON IT)', 150); return; }
+    G.remap = { a: row.a, fam: G.padsFam, t0: G.t }; sfx('confirm'); return; }
+  else if (row.id === 'reset') { if (k !== 'ok') return; padMaps[G.padsFam] = resetMap(LS(), G.padsFam); sfx('confirm'); toast(`${FAM_TAB[G.padsFam]} BUTTONS RESET TO DEFAULT`, 120); }
+  else if (row.id === 'back' && k === 'ok') { sfx('confirm'); go('menu'); return; }
+  sfx('select');
+}
+function drawPads() {
+  ctx.fillStyle = '#120a1e'; ctx.fillRect(0, 0, W, H); text('CONTROLLER + SETTINGS', 320, 18, 14, '#ffd25a');
+  const R = padsRows(), fam = G.padsFam, m = padMap(fam), on = (i) => i === G.padsI, hot = G.padActive;
+  const row = (i, x, y, w, l, v, vcol = '#ffd25a') => { panel(x, y, w, 22, on(i) ? '#3a2060' : '#121a36', on(i) ? '#ffd25a' : '#4a4f8c'); if (on(i) && hot) { ctx.strokeStyle = `rgba(122,211,240,${0.55 + 0.45 * Math.sin(G.t / 8)})`; ctx.lineWidth = 2; ctx.strokeRect(x - 2, y - 2, w + 4, 26); ctx.lineWidth = 1; }
+    text(l, x + 8, y + 11, 7, '#fff6e0', 'left', SMALL, null); if (v != null) text(v, x + w - 8, y + 11, 7, vcol, 'right', SMALL, null); btn(x, y, w, 22, () => { G.padsI = i; padsKey('ok'); }); };
+  // left column: connected pads + settings
+  text('CONNECTED', 24, 44, 7, '#9ab0d4', 'left', SMALL, null);
+  for (let s = 0; s < 2; s++) { const f = PM.family(s), gp = PM.pad(s); text(`P${s + 1}: ${f ? FAMILY_NAME[f] : 'none'}${gp?.mapping === 'standard' || !gp ? '' : ' (non-standard mapping)'}`, 24, 58 + s * 13, 7, f ? '#3ec46a' : '#6a7aa4', 'left', SMALL, null); }
+  text('Pad 2 plays P2 in VERSUS 2P (local 1v1).', 24, 86, 6, '#9ab0d4', 'left', SMALL, null);
+  row(0, 20, 98, 280, 'SOUND', isMuted() ? 'MUTED' : `${Math.round(getVolume() * 100)}%`);
+  row(1, 20, 126, 280, 'EFFECTS', G.fxPref === 'auto' ? `AUTO (${FX() === 'full' ? 'FULL' : 'LOW'})` : G.fxPref.toUpperCase());
+  row(2, 20, 154, 280, 'VIBRATION (PAD RUMBLE + PHONE)', G.vibe ? 'ON' : 'OFF', G.vibe ? '#3ec46a' : '#ff5a5a');
+  row(R.length - 2, 20, 196, 280, `RESET ${FAM_TAB[fam]} BUTTONS TO DEFAULT`, null);
+  row(R.length - 1, 20, 224, 280, 'BACK', null);
+  text('Move: D-pad or left stick (8-way).', 24, 258, 7, '#9ab0d4', 'left', SMALL, null);
+  text('OPTIONS / MENU pauses a fight.', 24, 272, 7, '#9ab0d4', 'left', SMALL, null);
+  // right column: mapping for the shown family
+  const tabs = FAMS.map((f, i) => { const x = 330 + i * 96; panel(x, 34, 90, 18, f === fam ? '#3a2060' : '#121a36', f === fam ? '#ffd25a' : '#4a4f8c'); text(FAM_TAB[f], x + 45, 43, 7, f === fam ? '#ffd25a' : '#9ab0d4', 'center', SMALL, null); btn(x, 34, 90, 18, () => { G.padsFam = f; }); return f; }); void tabs;
+  PAD_ACTIONS.forEach((a, j) => { const i = 3 + j, y = 60 + j * 27, x = 330, w = 286;
+    row(i, x, y, w, ACTION_NAME[a], null); if (G.remap?.a === a) text('PRESS A BUTTON...', x + w - 8, y + 11, 7, '#ff5aa8', 'right', SMALL, null); else drawGlyph(fam, m[a], x + w - 22, y + 11, 7); });
+  text(G.remap ? 'Press the new button on the controller. OPTIONS / MENU cancels.' : 'Select an action, then press the button you want. Left/right: glyph set.', 330 + 143, 284, 6, G.remap ? '#ff5aa8' : '#9ab0d4', 'center', SMALL, null);
+  text('Saved on this device, separately for PS, Xbox and other pads.', 330 + 143, 296, 6, '#6a7aa4', 'center', SMALL, null);
+}
+function drawControllerTable(y0) {
+  text('CONTROLLER (Bluetooth or USB, PS and Xbox style pads)', 30, y0, 8, '#ffd25a', 'left', SMALL, null);
+  const ps = padMap('ps'), xb = padMap('xbox');
+  PAD_ACTIONS.forEach((a, i) => { const x = 30 + (i % 4) * 150, y = y0 + 16 + Math.floor(i / 4) * 20; drawGlyph('ps', ps[a], x + 8, y, 7); drawGlyph('xbox', xb[a], x + 30, y, 7); text(ACTION_SHORT[a], x + 44, y, 7, '#fff6e0', 'left', SMALL, null); });
+  ctx.font = `7px ${SMALL}`; let x = glyphRow('ps', [[0, '/']], 30, y0 + 56, 6, 7, '#9ab0d4'); x = glyphRow('xbox', [[0, 'confirm']], x - 6, y0 + 56, 6, 7, '#9ab0d4');
+  x = glyphRow('ps', [[1, '/']], x, y0 + 56, 6, 7, '#9ab0d4'); x = glyphRow('xbox', [[1, 'back']], x - 6, y0 + 56, 6, 7, '#9ab0d4');
+  x = glyphRow('ps', [[9, '/']], x, y0 + 56, 6, 7, '#9ab0d4'); x = glyphRow('xbox', [[9, 'pause']], x - 6, y0 + 56, 6, 7, '#9ab0d4');
+  text('D-pad or left stick moves (diagonals work for rolls)  ·  remap buttons in CONTROLLER + SETTINGS', 30, y0 + 72, 7, '#9ab0d4', 'left', SMALL, null);
+}
 function drawHelp() {
   ctx.fillStyle = '#120a1e'; ctx.fillRect(0, 0, W, H); text('HOW TO PLAY', 320, 22, 14, '#ffd25a');
   const L = ['P1 KEYS: WASD move/jump/crouch   F light punch  G heavy punch   V light kick  B heavy kick', 'P2 KEYS: arrows   K LP   L HP   , LK   . HK     (1P can use either set)', 'HOLD BACK to block. Crouch-block lows; stand-block jump attacks.', 'THROW: forward + HP when close (unblockable)', 'SPECIALS (facing right): D,DF,F+P shot  B,F+K rush  D,D+P launcher  D,D+K low slide  D,DB,B+P overhead', 'SUPER: full BAG METER, then D,DF,F+K.   STRINGS: tap normals in rhythm (each fighter has 2)', 'CANCELS: light normals, crouch HP and string hits cancel into specials. MOVE LIST: I key / pause', 'COMBO TRAINER (menu): dummy, input display, step checkmarks. No KIBBLE.', 'Best of 3 rounds, 99 sec. Win the match, then PUNCHLINE TIME:', '   D, D + HK within 3 sec for a RUG PULL finisher (cartoon, no gore)', 'TOUCH: stick (left) + JUMP and LP HP LK HK (right). Menus: LP = OK, LK = back, HK = skin', 'P = pause, M = mute, Esc = back'];
-  L.forEach((s, i) => text(s, 30, 50 + i * 22, 8, '#fff6e0', 'left', SMALL, null)); btn(0, 0, W, H, () => go('menu'));
+  L.forEach((s, i) => text(s, 30, 44 + i * 16, 8, '#fff6e0', 'left', SMALL, null)); drawControllerTable(44 + L.length * 16 + 4); btn(0, 0, W, H, () => go('menu'));
 }
 // ---------------- move list + combo trainer ----------------
 // Everything shown here is generated from the real move data (moves.js moveList/drills), never typed by hand.
@@ -413,7 +557,8 @@ function drawMoveList() {
     else drawTokens(['LP', 'xx', ...r.input.filter((t) => t !== 'xx')], 352, y + 8, 12); });
   const bb = (x, w, label, fn, hot) => { panel(x, 320, w, 26, hot ? '#3a2060' : '#121a36', hot ? '#ffd25a' : '#4a4f8c'); text(label, x + w / 2, 333, 8, hot ? '#ffd25a' : '#fff6e0'); btn(x - 2, 316, w + 4, 34, fn); };
   bb(8, 70, '< PREV', () => mlNav(-1)); bb(86, 70, 'NEXT >', () => mlNav(1));
-  text(`A/D or arrows: fighter  ·  ${mlCanTrain() ? 'T: combo trainer  ·  ' : ''}Esc: back`, 320, 307, 7, '#9ab0d4', 'center', SMALL, null); // bottom-centre stays clear for the Inu Verse guest pill
+  const mf = curFam(); if (G.padActive && mf) { ctx.font = `6px ${SMALL}`; let x = glyphRow(mf, [[4, ''], [5, 'FIGHTER'], ...(mlCanTrain() ? [[3, 'TRAINER']] : []), [1, 'BACK']], 14, 307, 5, 6, '#9ab0d4'); text('|', x - 4, 307, 6, '#4a4f8c', 'left', SMALL, null); glyphRow(mf, mapPairs(mf), x + 4, 307, 5, 6, '#fff6e0'); }
+  else text(`A/D or arrows: fighter  ·  ${mlCanTrain() ? 'T: combo trainer  ·  ' : ''}Esc: back`, 320, 307, 7, '#9ab0d4', 'center', SMALL, null); // bottom-centre stays clear for the Inu Verse guest pill
   if (mlCanTrain()) bb(432, 104, 'TRAINER', () => startTrainer(c.id), true);
   bb(548, 84, ML.from === 'pause' ? 'RESUME' : 'BACK', closeMoveList);
 }
@@ -512,9 +657,11 @@ function updateMenus(scr) {
   else if ((G.scr === 'ladder' || G.scr === 'onlineres' || G.scr === 'gameover' || G.scr === 'ending' || G.scr === 'rankres') && G.t > 20 && (edge(0, 'lp') || edge(0, 'hp'))) menuKey('ok');
   else if (G.scr === 'title' && G.t > 10 && (edge(0, 'lp') || edge(0, 'hp'))) menuKey('ok');
   else if (G.scr === 'select') selectStep();
+  else if (G.scr === 'pads') { if (edge(0, 'u')) padsKey('up'); if (edge(0, 'd')) padsKey('down'); if (edge(0, 'l')) padsKey('left'); if (edge(0, 'r')) padsKey('right'); if (edge(0, 'lp')) padsKey('ok'); }
   else if (G.scr === 'movelist') { if (edge(0, 'l')) mlNav(-1); if (edge(0, 'r')) mlNav(1); if (G.t > 10 && edge(0, 'lk')) closeMoveList(); }
 }
 function updateFight() {
+  if (G.paused && G.mode !== 'online' && G.mode !== 'replay') pauseNav();
   if (G.mode === 'online') return updateOnline();
   if (G.mode === 'replay') return updateReplay();
   if (G.mode === 'trainer') { if (!G.paused) updateTrainer(); return; }
@@ -601,7 +748,7 @@ function drawOnlineRes() {
 function render() {
   regions = []; ctx.save(); if (G.shake > 0 && FX() !== 'full') G.shake = Math.min(G.shake, 3); if (G.shake > 0) ctx.translate(Math.round((Math.random() - 0.5) * G.shake), Math.round((Math.random() - 0.5) * G.shake)); /* integer offsets (no subpixel blur); decays per sim step, not per rendered frame (was 2x longer/shorter at 30/120Hz) */
   switch (G.scr) {
-    case 'title': drawTitle(); break; case 'menu': drawMenu(); break; case 'select': drawSelect(); break; case 'versus': drawVersus(); break; case 'ladder': drawLadder(); break; case 'shop': drawShop(); break; case 'help': drawHelp(); break; case 'online': drawOnline(); break; case 'lobby': drawLobby(); break; case 'onlineres': drawOnlineRes(); break; case 'movelist': drawMoveList(); break;
+    case 'title': drawTitle(); break; case 'menu': drawMenu(); break; case 'select': drawSelect(); break; case 'versus': drawVersus(); break; case 'ladder': drawLadder(); break; case 'shop': drawShop(); break; case 'help': drawHelp(); break; case 'pads': drawPads(); break; case 'online': drawOnline(); break; case 'lobby': drawLobby(); break; case 'onlineres': drawOnlineRes(); break; case 'movelist': drawMoveList(); break;
     case 'gameover': drawEnd(G.mode === 'versus' ? `${G.match.f[G.match.matchWinner].ch.name.toUpperCase()} WINS` : 'GOT RUGGED', G.mode === 'versus' ? ['GG. Rematch from the menu.'] : ['The ladder humbled you.', 'Diamond paws. Try again.'], '#ff5a5a'); break;
     case 'ending': drawEnd('LADDER CLEARED', [`${byId(G.p1).name} rugged Lord Rugsworth.`, 'The Kibble Verse is safe. Wen sequel.'], '#ffd25a'); drawSprite(byId(G.p1), Math.floor(G.t / 20) % 2 ? 'win' : 'win2', G.skin[0], 320, 300, 2.4, 1); break;
     case 'rankres': { const r = G.lastRank; drawEnd(r.won ? 'RANKED WIN' : 'RANKED LOSS', [`vs ${r.opp.name}`, `ELO ${r.before} -> ${r.after} (${r.after - r.before >= 0 ? '+' : ''}${r.after - r.before})`, `Current rank #${K.leaderboard().find((e) => e.you).rank}`, ...(r.posted ? [r.posted] : [])], r.won ? '#3ec46a' : '#ff5a5a'); break; }
@@ -615,13 +762,18 @@ function render() {
       if (G.mode === 'replay' && G.clip) { const c = G.clip.c; text('CLIP REPLAY · VERIFIED' + (c.bracket ? ' BRACKET' : ' RANKED') + ' 1V1', 320, 342, 6, '#ffd25a', 'center', SMALL, null); text(c.players[0].short || '', 60, 58, 6, '#9ab0d4', 'left', SMALL, null); text(c.players[1].short || '', 580, 58, 6, '#9ab0d4', 'right', SMALL, null); }
       if (G.mode === 'online' && G.net) { const N = G.net; text(N.s.side ? 'YOU' : 'YOU', N.s.side ? 580 : 60, 58, 7, '#3ec46a', N.s.side ? 'right' : 'left'); text(`${N.s.via === 'p2p' ? 'P2P' : 'RELAY'} D${N.s.delay}`, 320, 46, 6, '#9ab0d4', 'center', SMALL, null);
         if (N.stall > 30) { ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(0, 130, W, 60); text('WAITING FOR OPPONENT...', 320, 150, 12, '#ffd25a'); text(`forfeit in ${Math.max(0, Math.ceil((DISCONNECT_MS - N.s.silentFor()) / 1000))}s if they don't return`, 320, 172, 7, '#fff6e0', 'center', SMALL, null); } }
-      if (G.paused) { ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(0, 0, W, H); text('PAUSED', 320, 104, 24, '#ffd25a'); btn(0, 0, W, H, () => {});
-        [['RESUME', () => (G.paused = false)], ['MOVE LIST', () => openMoveList(G.p1, 'pause')], ['QUIT', () => { G.paused = false; go('menu'); }]].forEach(([n, fn], i) => { const y = 150 + i * 38; panel(220, y - 14, 200, 28, i ? '#121a36' : '#3a2060', i ? '#4a4f8c' : '#ffd25a'); text(n, 320, y, 10, i ? '#fff6e0' : '#ffd25a'); btn(216, y - 18, 208, 36, fn); });
-        text('P resume  ·  I move list  ·  Esc quit', 320, 270, 7, '#9ab0d4', 'center', SMALL, null); }
+      if (G.paused) { ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(0, 0, W, H); text('PAUSED', 320, pauseItems().length > 3 ? 66 : 104, 24, '#ffd25a'); btn(0, 0, W, H, () => {});
+        pauseItems().forEach(([n, fn], i) => { const L = pauseItems().length, y = 150 - (L - 3) * 16 + i * (L > 3 ? 30 : 38), on = i === Math.min(G.pauseI, L - 1); panel(220, y - 14, 200, 26, on ? '#3a2060' : '#121a36', on ? '#ffd25a' : '#4a4f8c'); text(n, 320, y - 1, 10, on ? '#ffd25a' : '#fff6e0'); btn(216, y - 15, 208, 30, () => { G.pauseI = i; fn(); }); });
+        if (G.padActive && curFam()) { ctx.font = `7px ${SMALL}`; glyphRow(curFam(), [[12, 'UP/DOWN'], [0, 'SELECT'], [1, 'RESUME'], [9, 'RESUME']], 196, 280, 6, 7, '#9ab0d4'); } else text('W/S + Enter  ·  P resume  ·  I move list  ·  Esc quit', 320, 280, 7, '#9ab0d4', 'center', SMALL, null); }
       break; }
   }
   ctx.restore();
-  if (G.toast) { const a = Math.min(1, G.toast.t / 20); ctx.globalAlpha = a; panel(120, 300, 400, 22, '#3a2060', '#ffd25a'); text(G.toast.text, 320, 311, 7, '#ffd25a', 'center', SMALL, null); ctx.globalAlpha = 1; }
+  if (G.toast) { const a = Math.min(1, G.toast.t / 20), P = G.toast.pad; ctx.globalAlpha = a;
+    if (P) { const fam = P.fam; panel(90, 112, 460, 64, '#1c1440', '#ffd25a'); text(G.toast.text, 320, 124, 8, '#ffd25a', 'center', SMALL, null);
+      ctx.font = `7px ${SMALL}`; glyphRow(fam, mapPairs(fam, ['lp', 'hp', 'lk', 'hk']), 112, 143, 6); glyphRow(fam, mapPairs(fam, ['special', 'super', 'block']), 318, 143, 6);
+      glyphRow(fam, [[0, 'CONFIRM'], [1, 'BACK'], [9, 'PAUSE']], 180, 163, 6, 7, '#9ab0d4'); }
+    else { panel(120, 300, 400, 22, '#3a2060', '#ffd25a'); text(G.toast.text, 320, 311, 7, '#ffd25a', 'center', SMALL, null); }
+    ctx.globalAlpha = 1; }
 }
 let acc = 0, last = performance.now();
 // vsync snap: rAF timestamps wobble +-1-2ms; a raw 16.67ms accumulator ran 0 or 2 updates on many frames (stutter). Snap to whole 60Hz frames.
@@ -639,4 +791,4 @@ function fit() { const vw = innerWidth, vh = innerHeight, d = devicePixelRatio |
 addEventListener('resize', fit); fit();
 // 🏠 Back to Inu Verse hooks (kibble-pay mountHome): confirm mid-match, save first.
 globalThis.__inuHome = { busy: () => G.scr === 'fight' ? 'Leave this fight and go back to Inu Verse? The match is forfeited (rank kept).' : false };
-window.__mbUI = { openMoveList, startTrainer, trainerReset, trainerPick, ML, menuRect: (i) => MENU_RECT(i), fxLevel: () => FX(), fxMon: FXM, refreshFeed, dailyNow, audioStarted }; // e2e/screenshot hooks (UI navigation + read-only state, no game-state cheats)
+window.__mbUI = { pads: () => ({ count: PM.count(), list: PM.list().map((g) => ({ index: g.index, id: g.id })), slots: [PM.family(0), PM.family(1)], active: G.padActive, fam: curFam(), maps: { ps: padMap('ps'), xbox: padMap('xbox'), generic: padMap('generic') }, vibe: G.vibe, pauseI: G.pauseI, padsI: G.padsI, remap: G.remap, padsFam: G.padsFam }), openMoveList, startTrainer, trainerReset, trainerPick, ML, menuRect: (i) => MENU_RECT(i), fxLevel: () => FX(), fxMon: FXM, refreshFeed, dailyNow, audioStarted }; // e2e/screenshot hooks (UI navigation + read-only state, no game-state cheats)

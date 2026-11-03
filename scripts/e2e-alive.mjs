@@ -26,8 +26,8 @@ const rects = (pg) => pg.evaluate(() => { const c = document.getElementById('gam
   for (const s of ['#stick', '#jump', '[data-k=lp]', '[data-k=hp]', '[data-k=lk]', '[data-k=hk]', '#top']) { const e = document.querySelector(s); if (!e) continue; const q = e.getBoundingClientRect(); if (q.width && getComputedStyle(e).visibility !== 'hidden' && !e.closest('.hide')) out.push([s, (q.left - c.left) / k, (q.top - c.top) / k, (q.right - c.left) / k, (q.bottom - c.top) / k]); }
   const pill = document.querySelector('inu-profile-badge'); if (pill) { const q = pill.getBoundingClientRect(); if (q.width) out.push(['pill', (q.left - c.left) / k, (q.top - c.top) / k, (q.right - c.left) / k, (q.bottom - c.top) / k]); }
   return out; });
-// menu UI boxes in canvas units: 7 items, settings chips, daily, feed, badges
-const UI = [...Array.from({ length: 7 }, (_, i) => ['item' + i, 14, 36 + i * 31, 304, 62 + i * 31]), ['chips', 100, 256, 304, 276], ['daily', 312, 36, 626, 102], ['feed', 312, 108, 626, 184], ['badges', 312, 190, 468, 248]];
+// menu UI boxes in canvas units: 8 items, settings chips, daily, feed, badges
+const UI = [...Array.from({ length: 8 }, (_, i) => ['item' + i, 14, 36 + i * 27, 304, 60 + i * 27]), ['chips', 100, 256, 304, 276], ['daily', 312, 36, 626, 102], ['feed', 312, 108, 626, 184], ['badges', 312, 190, 468, 248]];
 const overlap = (a, b) => a[1] < b[3] - 1 && b[1] < a[3] - 1 && a[2] < b[4] - 1 && b[2] < a[4] - 1;
 
 // 1) menu layout + daily + feed at every size

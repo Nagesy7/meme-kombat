@@ -24,3 +24,4 @@ body.touch #touch{display:block}
 #stick.under,#btns button.under{opacity:.28} /* a fighter is behind this control (see dimControls) */
 #vaultLink{position:fixed;transform:translateY(-50%);font-family:ui-monospace,Menlo,Consolas,monospace;color:#9ab0d4;text-decoration:underline;z-index:3;white-space:nowrap;pointer-events:auto}#vaultLink[hidden]{display:none}
 body.touch #touch.hide{display:none}
+body.padactive #touch{display:none!important}
