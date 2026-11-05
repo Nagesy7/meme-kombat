@@ -111,3 +111,10 @@ Zachary's call: once adopted this is the **only** touch layout (no toggle, no UR
 - Guest pill: on phone landscape the small guest icon docks bottom-left and the KIBBLE live footer starts right after it, so it no longer covers the footer or the bottom-centre hint lines; index.html passes InuProfileConfig.avoid='#inu-legal' for the expanded (wallet) pill.
 - BACK on character select, skin shop and online lobby sat under the LP/JUMP touch buttons; with touch controls it is a small top-left button now (desktop unchanged).
 - Combo Trainer bottom hint drops the keyboard-only keys on touch and shifts right so it clears the footer.
+
+## Shop + For devs links
+- Main menu link row under the settings chips: "🛍️ Shop" (tooltip: "Optional cosmetics. $KIBBLE is never needed to play.") and "🛠️ For devs". Keyboard/pad focus slots 8 and 9 (up from ARCADE wraps to For devs; left/right toggles on the row); tap/click works too.
+- Results nudge after arcade/versus/CPU-ladder results only (gameover, ladder, ending, rankres), never online, trainer, pre-fight ladder or mid-fight. Once per session via sessionStorage['inu.shopNudge']. Focus starts on "Not now" so mashing through results never opens the shop.
+- Analytics: va('event',{name:'paid_link_click',data:{product,from,site:'meme-brawl'}}), no wallet, mint, name or score.
+- Links open in a new tab (opener cleared); if the popup is blocked, they open in the same tab.
+- Tests: tests/shoplinks.test.js and scripts/e2e-shop.mjs (`npm run e2e:shop`).
