@@ -104,3 +104,10 @@ Zachary's call: once adopted this is the **only** touch layout (no toggle, no UR
 - **Rumble:** `vibrationActuator.playEffect('dual-rumble')` on hit, block and KO when VIBRATION is on. Errors are swallowed.
 - **Art:** all glyphs are plain shapes and letters drawn on the canvas. No console logos or artwork.
 - **Tests:** `tests/gamepad.test.js` (unit) and `scripts/e2e-gamepad.mjs` (fake pads injected into `navigator.getGamepads`). Neither has been tried on real Bluetooth hardware yet.
+
+## Polish pass, Nov 5 2026 (rules 3)
+- LK xx slide at max LK range now connects for Bonkus (Ground Ball), Toot Lord (Low Rumble) and Boomer Bob (Lawn Mower Slide): their slide uses the roster's standard slide timing (7f startup, 6.5 dash, same as President Inu / Muchwow). Damage unchanged; all other fighters unchanged. RULES 2 -> 3; rules-2 and rules-1 clips replay under their own rules (clipRules tries 3, 2, 1); online peers on different rules refuse to start.
+- Version mismatch is now clean on both sides: the guest's bye carries why:'rules', so the host shows NO CONTEST / version mismatch instead of "opponent left, win by forfeit".
+- Guest pill: on phone landscape the small guest icon docks bottom-left and the KIBBLE live footer starts right after it, so it no longer covers the footer or the bottom-centre hint lines; index.html passes InuProfileConfig.avoid='#inu-legal' for the expanded (wallet) pill.
+- BACK on character select, skin shop and online lobby sat under the LP/JUMP touch buttons; with touch controls it is a small top-left button now (desktop unchanged).
+- Combo Trainer bottom hint drops the keyboard-only keys on touch and shifts right so it clears the footer.

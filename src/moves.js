@@ -5,7 +5,10 @@
 
 // Ruleset version. 1 = launch rules (4 specials, no strings/cancels). 2 = combo update. Clips recorded under rules 1 keep
 // replaying with rules 1 (replay.js detects it from the checksum); online peers refuse to start on a mismatch.
-export const RULES = 2;
+// 3 = Nov 2026 slide tune: Bonkus, Toot Lord and Boomer Bob's sliding low uses the roster's standard slide timing (r3 below)
+// so LK xx slide connects at max LK range like everyone else's. Damage unchanged. Rules-2 clips replay with rules 2.
+export const RULES = 3;
+export const RULESETS = [3, 2, 1];
 
 // startup/active/recovery frames, hitbox [x0,x1] forward of centre, [y0,y1] above ground
 export const NORMALS = {
@@ -60,17 +63,17 @@ export const KITS = {
   wiffy: { style: 'Speed', hc: [], chains: [{ name: 'Hat Flurry', seq: ['lp', 'lp', 'lk', 'hk'] }, { name: 'Beanie Bop', seq: ['lk', 'hp'] }],
     low: { name: 'Tail Spin Skid', dmg: 66, s: 5, dash: 8 }, over: { name: 'Hat Hop', dmg: 72, s: 9, hop: 5.2 } },
   bonkus: { style: 'Power', hc: ['hp', 'hk'], chains: [{ name: 'Double Bonk', seq: ['hp', 'hk'], end: { launch: 8 } }, { name: 'Batter Up', seq: ['lp', 'hp'] }],
-    low: { name: 'Ground Ball', dmg: 70, s: 9, dash: 5.5 }, over: { name: 'Overhead Bonk', dmg: 76, s: 12, hop: 6 } },
+    low: { name: 'Ground Ball', dmg: 70, s: 9, dash: 5.5, r3: { s: 7, dash: 6.5 } }, over: { name: 'Overhead Bonk', dmg: 76, s: 12, hop: 6 } },
   moneymew: { style: 'Rushdown', hc: [], chains: [{ name: 'Paw Swipes', seq: ['lp', 'lp', 'lp', 'hp'] }, { name: 'Tail Flick Kicks', seq: ['lk', 'hk'] }],
     low: { name: 'Under-Table Swipe', dmg: 68, s: 5, dash: 7.5 }, over: { name: 'Shelf Pounce', dmg: 74, s: 9, hop: 5.6 } },
   toot: { style: 'Space control', hc: ['hp'], chains: [{ name: 'Wind Section', seq: ['lp', 'hp', 'hk'] }, { name: 'Gust Kicks', seq: ['lk', 'hk'], end: { kb: 10 } }],
-    low: { name: 'Low Rumble', dmg: 72, s: 8, dash: 5 }, over: { name: 'Cloud Hop Stomp', dmg: 78, s: 11, hop: 6.4 } },
+    low: { name: 'Low Rumble', dmg: 72, s: 8, dash: 5, r3: { s: 7, dash: 6.5 } }, over: { name: 'Cloud Hop Stomp', dmg: 78, s: 11, hop: 6.4 } },
   sealbert: { style: 'Grappler', hc: ['hp'], chains: [{ name: 'Flipper Slap', seq: ['lp', 'hp'] }, { name: 'Clap Clap Slap', seq: ['lk', 'lk', 'hp'] }],
     low: { name: 'Belly Slide', dmg: 74, s: 7, dash: 7 }, over: { name: 'Ball Bounce Drop', dmg: 76, s: 10, hop: 6 } },
   stampy: { style: 'Bruiser', hc: ['hp'], chains: [{ name: 'Horn Hooks', seq: ['hp', 'hp'], end: { launch: 8 } }, { name: 'Catwalk Kicks', seq: ['lk', 'hk'] }],
     low: { name: 'Runway Skid', dmg: 72, s: 8, dash: 6 }, over: { name: 'Stomp Step', dmg: 76, s: 11, hop: 5.6 } },
   boomer: { style: 'Footsies', hc: ['hk'], chains: [{ name: 'Firm Handshake', seq: ['lp', 'lk', 'hp'] }, { name: 'Tee Off Kicks', seq: ['lk', 'lk', 'hk'], end: { trip: true } }],
-    low: { name: 'Lawn Mower Slide', dmg: 70, s: 8, dash: 5.5 }, over: { name: 'Briefcase Drop', dmg: 78, s: 11, hop: 5.6 } },
+    low: { name: 'Lawn Mower Slide', dmg: 70, s: 8, dash: 5.5, r3: { s: 7, dash: 6.5 } }, over: { name: 'Briefcase Drop', dmg: 78, s: 11, hop: 5.6 } },
   rugsworth: { style: 'Boss', hc: ['hp', 'hk'], chains: [{ name: 'Market Maker', seq: ['lp', 'hp', 'hk'] }, { name: 'Whale Wake', seq: ['hk', 'hp'] }],
     low: { name: 'Rug Sweep', dmg: 70, s: 8, dash: 6 }, over: { name: 'Whale Breach', dmg: 74, s: 12, hop: 6 } },
 };
@@ -79,14 +82,14 @@ export const kitFor = (ch) => KITS[ch.id] || KITS.inu;
 export function specialName(ch, slot) { const k = kitFor(ch); return slot === 'low' || slot === 'over' ? k[slot].name : ch.specials[slot].name; }
 
 // frame data of a special for this fighter (damage includes the fighter's power multiplier)
-export function specialMove(ch, kind) {
-  const S = ch.specials, pw = ch.pow || 1, K = kitFor(ch);
+export function specialMove(ch, kind, rules = RULES) {
+  const S = ch.specials, pw = ch.pow || 1, K = kitFor(ch), LO = rules >= 3 && K.low.r3 ? { ...K.low, ...K.low.r3 } : K.low;
   if (kind === 'proj') return { s: 12, a: 1, r: 22, proj: true, dmg: Math.round(S.proj.dmg * pw), pose: 'special', special: S.proj.name, x: [0, 0], y: [0, 0] };
   if (kind === 'rush') return { s: 8, a: 14, r: 18, dmg: Math.round(S.rush.dmg * pw), hs: 22, bs: 16, kb: 8, x: [0, 60], y: [20, 100], lvl: 'mid', pose: 'rush', dash: 7.5 * (ch.spd || 1), special: S.rush.name, chip: true };
   if (kind === 'rise') return { s: 3, a: 12, r: 24, dmg: Math.round(S.rise.dmg * pw), hs: 26, bs: 18, kb: 3, x: [0, 54], y: [30, 150], lvl: 'mid', pose: 'rise', rise: 11, launch: 11, special: S.rise.name, chip: true, invS: 6 };
   if (kind === 'super') return { s: 10, a: 22, r: 26, dmg: Math.round(S.super.dmg * pw), hs: 40, bs: 24, kb: 10, x: [-10, 120], y: [0, 140], lvl: 'mid', pose: 'super', dash: 6, special: S.super.name, chip: true, launch: 12, super: true, invS: 12 };
   // rules 2: sliding low (knocks down, low hurtbox so it slips under high attacks; punishable on block)
-  if (kind === 'low') return { s: K.low.s, a: 10, r: 20, dmg: Math.round(K.low.dmg * pw), hs: 0, bs: 12, kb: 3, x: [0, 62], y: [0, 26], lvl: 'low', pose: 'sweep', dash: K.low.dash, trip: true, lowHurt: true, special: K.low.name, chip: true };
+  if (kind === 'low') return { s: LO.s, a: 10, r: 20, dmg: Math.round(K.low.dmg * pw), hs: 0, bs: 12, kb: 3, x: [0, 62], y: [0, 26], lvl: 'low', pose: 'sweep', dash: LO.dash, trip: true, lowHurt: true, special: K.low.name, chip: true };
   // rules 2: hopping overhead (stand-block it; lands on its own, so it can't be chained into)
   if (kind === 'over') return { s: K.over.s, a: 6, r: 14, dmg: Math.round(K.over.dmg * pw), hs: 18, bs: 10, kb: 4, x: [0, 58], y: [-14, 70], lvl: 'over', pose: 'jpunch', hop: K.over.hop, special: K.over.name, chip: true };
 }

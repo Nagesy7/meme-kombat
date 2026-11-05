@@ -50,7 +50,7 @@ const neutral = (f) => f.st === 'idle' || f.st === 'walk' || f.st === 'crouch' |
 
 function startMove(m, f, mv, name) { consume(f); if (mv.special) f.specialsUsed = (f.specialsUsed || 0) + 1; f.st = 'attack'; f.t = 0; f.move = { ...mv, name }; f.hitDone = false; m.events.push({ type: 'whiff', who: f.side, mv: name }); }
 
-const specialMove = (f, kind) => buildSpecial(f.ch, kind);
+const specialMove = (m, f, kind) => buildSpecial(f.ch, kind, m.rules);
 
 // Button presses are buffered for BUFFER ticks (also through hitstop) so a tap during
 // recovery/hitstop still comes out on the first actionable frame. Consumed when a move starts.
@@ -66,7 +66,7 @@ function trySpecial(m, f, pr) {
     const M = MOTIONS[sp.motion];
     if ((sp.meter && f.meter < sp.meter) || (M.stand && f.crouchHeld) || (sp.oneProj && m.proj.some((p) => p.owner === f.side)) || !motion2(f.buf, M, m.tick)) continue;
     if (sp.slot === 'super') { f.meter = 0; m.events.push({ type: 'super', who: f.side }); say(m, f.ch.specials.super.name.toUpperCase(), 50, 'SUPER'); m.hitstop = 24; }
-    f.chainSeq = null; startMove(m, f, specialMove(f, sp.slot), sp.slot); return true;
+    f.chainSeq = null; startMove(m, f, specialMove(m, f, sp.slot), sp.slot); return true;
   }
   return false;
 }
@@ -98,10 +98,10 @@ function control(m, f, o, inp) {
   if (f.y > 0) return;
   if (m.rules >= 2) { if (trySpecial(m, f, pr)) return; } else {
   // rules 1 specials (priority: super > rise > rush > proj)
-  if ((pr.lk || pr.hk) && f.meter >= 100 && motion(f.buf, [2, 3, 6], 24, m.tick)) { f.meter = 0; m.events.push({ type: 'super', who: f.side }); say(m, f.ch.specials.super.name.toUpperCase(), 50, 'SUPER'); m.hitstop = 24; return startMove(m, f, specialMove(f, 'super'), 'super'); }
-  if (anyP && ddMotion(f.buf, m.tick)) return startMove(m, f, specialMove(f, 'rise'), 'rise');
-  if (anyK && motion(f.buf, [4, 6], 16, m.tick) && !f.crouchHeld) return startMove(m, f, specialMove(f, 'rush'), 'rush');
-  if (anyP && motion(f.buf, [2, 3, 6], 20, m.tick) && !m.proj.some((p) => p.owner === f.side)) return startMove(m, f, specialMove(f, 'proj'), 'proj');
+  if ((pr.lk || pr.hk) && f.meter >= 100 && motion(f.buf, [2, 3, 6], 24, m.tick)) { f.meter = 0; m.events.push({ type: 'super', who: f.side }); say(m, f.ch.specials.super.name.toUpperCase(), 50, 'SUPER'); m.hitstop = 24; return startMove(m, f, specialMove(m, f, 'super'), 'super'); }
+  if (anyP && ddMotion(f.buf, m.tick)) return startMove(m, f, specialMove(m, f, 'rise'), 'rise');
+  if (anyK && motion(f.buf, [4, 6], 16, m.tick) && !f.crouchHeld) return startMove(m, f, specialMove(m, f, 'rush'), 'rush');
+  if (anyP && motion(f.buf, [2, 3, 6], 20, m.tick) && !m.proj.some((p) => p.owner === f.side)) return startMove(m, f, specialMove(m, f, 'proj'), 'proj');
   }
   // throw: forward + HP close
   if (pr.hp && (d === 6) && Math.abs(o.x - f.x) < THROW.range && o.y === 0 && neutral(o) && o.st !== 'down' && o.inv <= 0) {

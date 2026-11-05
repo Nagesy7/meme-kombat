@@ -153,6 +153,20 @@ if (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) documen
 // Touch: compact floating stick (left thumb) + big JUMP with attacks around it (right thumb). Every pointer is tracked by
 // its own pointerId (true multi-touch: stick + jump = diagonal jump; releasing one never cancels the other). The result
 // is merged into the SAME pad keys/format as the keyboard (touchinput.mergePad), so CPU, local and online lockstep match.
+// Guest pill (kibble-pay inu-profile.js) vs the bottom hint text: on phones its auto-placement could land on canvas hints
+// (title / results / trainer lines are drawn in the canvas, invisible to it) or on top of the "KIBBLE live · Terms" footer.
+// While the pill is the small guest icon, dock it in the bottom-left corner and start the footer just right of it, so
+// neither covers the other or the bottom-centre hints. An expanded (wallet) pill keeps its own free-space placement,
+// with the footer listed as something to avoid (index.html InuProfileConfig.avoid).
+function fitPill() {
+  const b = document.getElementById('inu-profile-badge'), l = document.getElementById('inu-legal'), C = window.InuProfileConfig || {};
+  if (!b) return;
+  const dock = b.dataset.min === '1' && innerWidth > innerHeight && innerHeight < 500;
+  if (dock) { C.position = 'bottom-left'; const st = b.style; st.transform = ''; st.right = st.top = 'auto'; st.left = 'calc(env(safe-area-inset-left, 0px) + 4px)'; st.bottom = '2px';
+    if (l) { const r = b.getBoundingClientRect(); l.style.left = Math.round(r.right + 4) + 'px'; l.style.bottom = Math.round(2 + Math.max(0, (r.height - l.getBoundingClientRect().height) / 2)) + 'px'; } }
+  else { if (C.position) { delete C.position; b.style.left = b.style.bottom = ''; } if (l) { l.style.left = '4px'; l.style.bottom = '2px'; } }
+}
+setInterval(fitPill, 400); addEventListener('resize', () => setTimeout(fitPill, 200));
 const zone = document.getElementById('stickzone'), stick = document.getElementById('stick'), knob = document.getElementById('knob');
 const roles = new PointerRoles(); let stk = null, stickDirs = { u: 0, d: 0, l: 0, r: 0 };
 function syncTouch() {
@@ -440,7 +454,7 @@ function drawSelect() {
     if (G.ready[p]) text('READY!', x, 180, 12, '#3ec46a'); };
   show(0, 60, 1); if (G.mode === 'versus') show(1, 580, -1);
   else { panel(400, 190, 220, 120, '#121a36', '#4a4f8c'); text(G.mode === 'online' ? 'ONLINE 1V1: LOCK IN TO MATCH' : G.mode === 'ranked' ? `PRACTICE ELO ${K.profile().rating}` : G.mode === 'trainer' ? 'COMBO TRAINER: NO KIBBLE' : 'LADDER: 6 RIVALS + BOSS', 510, 206, 8, '#ffd25a'); text('Keys: WASD move, F/G punch', 510, 228, 7, '#fff6e0', 'center', SMALL, null); text('V/B kick (or arrows + K L , .)', 510, 242, 7, '#fff6e0', 'center', SMALL, null); text('LP/Enter to lock in', 510, 262, 7, '#fff6e0', 'center', SMALL, null); text(G.holder ? 'HOLDER: alt costumes unlocked' : 'Hold 1000 KIBBLE: alt costumes', 510, 282, 7, '#3fb6a8', 'center', SMALL, null); text('cosmetic only, no stat boosts', 510, 296, 6, '#9ab0d4', 'center', SMALL, null); }
-  btn(560, 330, 72, 24, () => go('menu')); text('BACK', 596, 342, 8, '#9ab0d4');
+  backBtn(() => go('menu'), 120, 6);
   panel(8, 6, 96, 20, '#3a2060', '#ffd25a'); text('MOVE LIST', 56, 16.5, 7, '#ffd25a'); btn(4, 2, 104, 28, () => openMoveList(ROSTER[G.sel[0]].id, 'select')); text('I', 112, 16, 6, '#9ab0d4', 'left', SMALL, null);
 }
 const inputStr = (t) => t.map((x, i) => (x === '+' ? ' + ' : (i && t[i - 1] !== '+' ? ',' : '') + x)).join('');
@@ -604,7 +618,7 @@ function trainerHud(m) {
   panel(8, 82, 66, 10 * 13 + 14, 'rgba(14,18,44,.85)', '#4a4f8c'); text('INPUT', 41, 89, 6, '#9ab0d4', 'center', FONT, null);
   T.hist.forEach((h, j) => { const y = 102 + j * 13; text(String(Math.min(99, h.n)), 24, y, 6, j ? '#9ab0d4' : '#fff6e0', 'right', FONT, null); drawTokens([h.dir, ...h.btns], 27, y, 11); });
   if (m.f[0].combo >= 2) text(`${m.f[0].combo} HITS`, 320, 96, 12, '#ffd25a');
-  text('COMBO TRAINER · the dummy never attacks · no $KIBBLE, no rank · Q/E drill  R reset  T show me', 320, 352, 6, '#9ab0d4', 'center', SMALL, null);
+  text('COMBO TRAINER · the dummy never attacks · no $KIBBLE, no rank' + (TOUCH() ? '' : ' · Q/E drill  R reset  T show me'), TOUCH() ? 346 : 320, 352, 6, '#9ab0d4', 'center', SMALL, null);
 }
 async function shopAct(i) {
   if (i < K.SHOP.length) { const it = K.SHOP[i]; if (K.mode !== 'live' && K.mode !== 'demo') { G.msg = K.SOON_MSG; return; } if (!K.wallet.address) { G.msg = 'Connect a wallet first'; return; } const r = await K.wallet.buy({ itemId: it.id }); G.msg = r.ok ? `Bought ${it.name}! sig ${String(r.signature).slice(0, 14)}` : `${r.error === K.SOON_MSG ? '' : 'Failed: '}${r.error}`; if (r.ok) sfx('coin'); }
@@ -639,7 +653,7 @@ function drawShop() {
     if (!lb.length) text('No ranked wins posted yet this week. Sign in and win!', 36, 292, 6, '#fff6e0', 'left', SMALL, null);
     lb.slice(0, 5).forEach((e, j) => text(`#${e.rank} ${e.wallet.slice(0, 4)}..${e.wallet.slice(-4)}  ${e.score}`, 36, 290 + j * 12, 6, e.wallet === me ? '#3ec46a' : '#fff6e0', 'left', SMALL, null)); }
   if (K.shiba) { const c = K.shiba.canvas(1.2); ctx.drawImage(c, 606 - c.width / 2, 318 - c.height); text(K.shiba.profile.name, 606, 326, 6, '#ffd25a', 'center', SMALL, null); }
-  if (G.msg) text(G.msg, 320, 230, 7, '#3ec46a', 'center', SMALL, null); btn(560, 332, 72, 24, () => go('menu')); text('BACK', 596, 344, 8, '#9ab0d4');
+  if (G.msg) text(G.msg, 320, 230, 7, '#3ec46a', 'center', SMALL, null); backBtn(() => go('menu'), 8, 6, 332);
 }
 
 // ---------------- loop ----------------
@@ -713,7 +727,7 @@ function updateOnline() {
   let n = 0; while (ls.ready() && n < 3) { const t = ls.tick, inp = ls.take(); N.rec?.add(t, encode(inp[0]), encode(inp[1])); step(m, inp); n++; for (const ev of m.events) spawnFx(ev); m.events.length = 0; const ck = ls.checkpoint(stateHash(m)); if (ck) N.s.send(ck);
     if (m.phase === 'matchEnd') { music('win'); N.report = resultReport(m); N.post = 'Verifying result with the server...'; N.s.report({ ...N.report, replay: N.rec ? { inputs: N.rec.inputs } : undefined }).then((r) => onlinePosted(r)).catch((e) => { N.post = 'Result not verified: ' + e.message; }); break; } }
   N.stall = n ? 0 : N.stall + 1;
-  if (!n && (N.s.peerGone || N.s.silentFor() > DISCONNECT_MS)) onlineEnd('forfeit');
+  if (!n && N.s.peerMismatch) onlineEnd('mismatch'); else if (!n && (N.s.peerGone || N.s.silentFor() > DISCONNECT_MS)) onlineEnd('forfeit');
 }
 async function onlinePosted(r) { const N = G.net; if (!N) return;
   const say = (x) => { N.post = x.status === 'verified' ? (x.bracket ? `Verified by both players. Bracket result sent${x.clip ? ' + clip saved' : ''}` : x.recorded ? `Verified by both players. Ranked win posted: ${x.score} pts on the prize board` : `Verified by both players. ${x.reason || ''}`) : x.status === 'disputed' ? 'Reports differ: result NOT recorded' : (x.reason || 'Result pending'); };
@@ -728,6 +742,12 @@ function drawOnline() {
   ONLINE.forEach(([n, fn], i) => { const y = 84 + i * 40, on = i === (G.onI || 0); panel(170, y - 15, 300, 30, on ? '#3a2060' : '#121a36', on ? '#ffd25a' : '#4a4f8c'); text(n, 320, y, 10, on ? '#ffd25a' : '#fff6e0'); btn(170, y - 15, 300, 30, () => { G.onI = i; fn(); }); });
   if (G.msg) text(G.msg, 320, 340, 7, '#ff7a4a', 'center', SMALL, null);
 }
+// BACK on select / shop / lobby: bottom-right on desktop; with touch controls on screen that corner sits under the LP/JUMP
+// buttons, so it moves to a small top-left button there (LK still backs out too).
+function backBtn(fn, tx, ty, by = 330) {
+  if (!TOUCH()) { btn(560, by, 72, 24, fn); text('BACK', 596, by + 12, 8, '#9ab0d4'); return; }
+  panel(tx, ty, 52, 20, '#121a36', '#4a4f8c'); text('BACK', tx + 26, ty + 10.5, 7, '#9ab0d4'); btn(tx - 2, ty - 2, 56, 26, fn);
+}
 function drawLobby() {
   ctx.drawImage(stageCanvas('pond'), 0, 0); ctx.fillStyle = 'rgba(6,4,20,.72)'; ctx.fillRect(0, 0, W, H);
   const s = G.net?.s; text(s?.room?.pair ? 'BRACKET MATCH' : G.onKind === 'quick' ? (G.onRanked ? 'RANKED QUICK MATCH' : 'QUICK MATCH') : G.onKind === 'join' ? 'JOINING ROOM' : 'PRIVATE ROOM', 320, 34, 16, '#ffd25a');
@@ -736,13 +756,13 @@ function drawLobby() {
   if (s?.code && G.onKind !== 'quick') { panel(220, 90, 200, 60, '#121a36'); text('ROOM CODE', 320, 104, 8, '#9ab0d4'); text(s.code, 320, 130, 22, '#fff6e0');
     text(s.link, 320, 170, 6, '#3fb6a8', 'center', SMALL, null); panel(250, 186, 140, 24, '#3a2060', '#ffd25a'); text('COPY LINK', 320, 198, 8, '#ffd25a'); btn(250, 186, 140, 24, () => { navigator.clipboard?.writeText(s.link).then(() => (G.lobbyMsg = 'Link copied!')).catch(() => {}); }); }
   text(G.lobbyMsg || '', 320, 240, 8, '#fff6e0'); if (!s || s.state !== 'ready') text('.'.repeat(1 + (Math.floor(G.t / 20) % 3)), 320, 258, 10, '#ffd25a');
-  btn(560, 330, 72, 24, () => go('online')); text('BACK', 596, 342, 8, '#9ab0d4');
+  backBtn(() => go('online'), 8, 6);
 }
 function drawOnlineRes() {
   const N = G.net || {}, m = G.match, me = N.s?.side ?? 0, why = N.ended;
   const won = why === 'forfeit' ? true : why === 'done' && m.matchWinner === me;
-  const title = why === 'desync' ? 'NO CONTEST' : why === 'forfeit' ? 'OPPONENT LEFT' : won ? 'YOU WIN' : 'YOU LOSE';
-  const lines = why === 'desync' ? ['Desync detected (checksums differ).', 'Match voided: nothing recorded.'] : why === 'forfeit' ? ['Win by forfeit (opponent disconnected).', 'Forfeits are not ranked: both players must confirm a result.'] : [`${m.f[m.matchWinner].ch.name} wins ${m.wins[m.matchWinner]}-${m.wins[1 - m.matchWinner]}`, N.post || '', `Room ${N.s?.code || ''} via ${N.s?.via === 'p2p' ? 'WebRTC' : 'relay'}`];
+  const title = why === 'desync' || why === 'mismatch' ? 'NO CONTEST' : why === 'forfeit' ? 'OPPONENT LEFT' : won ? 'YOU WIN' : 'YOU LOSE';
+  const lines = why === 'desync' ? ['Desync detected (checksums differ).', 'Match voided: nothing recorded.'] : why === 'mismatch' ? ['Version mismatch: your opponent has an older or newer Meme Brawl.', 'Both refresh the page and try again. Nothing recorded.'] : why === 'forfeit' ? ['Win by forfeit (opponent disconnected).', 'Forfeits are not ranked: both players must confirm a result.'] : [`${m.f[m.matchWinner].ch.name} wins ${m.wins[m.matchWinner]}-${m.wins[1 - m.matchWinner]}`, N.post || '', `Room ${N.s?.code || ''} via ${N.s?.via === 'p2p' ? 'WebRTC' : 'relay'}`];
   drawEnd(title, lines, won ? '#3ec46a' : why === 'desync' ? '#ffd25a' : '#ff5a5a');
 }
 function render() {

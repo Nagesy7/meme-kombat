@@ -24,7 +24,7 @@ export function replayTo(clip, { makeMatch, step }, toTick = clip.ticks, rules =
 }
 // Clips don't store a ruleset (server clip format v1). Clips recorded before the combo update (rules 1) only reproduce
 // their verified checksum under rules 1, so pick the newest ruleset whose full replay matches the stored checksum.
-export function clipRules(clip, fns, candidates = [2, 1]) {
+export function clipRules(clip, fns, candidates = [3, 2, 1]) {
   for (const r of candidates) { const { report } = replayTo(clip, fns, clip.ticks, r); if (report && report.checksum === clip.checksum) return r; }
   return null;
 }

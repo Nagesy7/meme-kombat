@@ -45,7 +45,7 @@ export class OnlineSession {
   }
   // ---- transport ----
   onMessage(f) { this.handlers.push(f); }
-  emit(m) { this.lastSeen = performance.now(); if (m.t === 'ping') return this.send({ t: 'pong', ts: m.ts }); if (m.t === 'pong') { this.rtt = performance.now() - m.ts; return; } if (m.t === 'bye') this.peerGone = true; if (m.t === 'go') this.gotGo = m; else if (m.t === 'in' || m.t === 'ck') this.inbox.push(m); for (const f of this.handlers) f(m); }
+  emit(m) { this.lastSeen = performance.now(); if (m.t === 'ping') return this.send({ t: 'pong', ts: m.ts }); if (m.t === 'pong') { this.rtt = performance.now() - m.ts; return; } if (m.t === 'bye') { this.peerGone = true; if (m.why === 'rules') this.peerMismatch = true; } if (m.t === 'go') this.gotGo = m; else if (m.t === 'in' || m.t === 'ck') this.inbox.push(m); for (const f of this.handlers) f(m); }
   drain() { const a = this.inbox; this.inbox = []; return a; }
   send(m) { if (this.dc && this.dc.readyState === 'open') { try { this.dc.send(JSON.stringify(m)); return; } catch {} } this.out.push(m); }
   async flush() { if (!this.out.length || this.closed) return; const msgs = this.out.splice(0, 64); try { await this.req('signal', { code: this.code, side: this.side, tok: this.tok, msgs }); } catch { this.out.unshift(...msgs); } }
@@ -77,7 +77,7 @@ export class OnlineSession {
     else { const go = await new Promise((res) => { if (this.gotGo) return res(this.gotGo); this.handlers.push((m) => { if (m.t === 'go') res(m); }); });
       if (go.via === 'p2p' && opened) await Promise.race([opened, sleep(2000)]);
       // both peers must run the same game rules or lockstep would desync: refuse early with a clear message (old host = no rules field = 1)
-      if ((go.rules ?? 1) !== RULES) { this.send({ t: 'bye' }); this.set('error', 'Version mismatch: your opponent has an older or newer Meme Brawl. Both refresh the page and try again.'); this.leave(); return; }
+      if ((go.rules ?? 1) !== RULES) { this.send({ t: 'bye', why: 'rules', rules: RULES }); this.set('error', 'Version mismatch: your opponent has an older or newer Meme Brawl. Both refresh the page and try again.'); this.leave(); return; }
       this.delay = go.delay; this.via = go.via; }
     this.set('ready', `Connected (${this.via === 'p2p' ? 'WebRTC peer-to-peer' : 'server relay'})`);
     this.lastSeen = performance.now();
